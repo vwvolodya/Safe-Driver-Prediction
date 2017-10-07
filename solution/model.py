@@ -10,7 +10,7 @@ from sklearn import metrics
 
 
 class DriverClassifier(nn.Module):
-    def __init__(self, input_size=57, seed=1010101):
+    def __init__(self, input_size, seed=1010101):
 
         self._metrics = defaultdict(list)
         self._epoch = 0
@@ -33,8 +33,10 @@ class DriverClassifier(nn.Module):
         # self.bn1.double()     can convert full model to double.
         # self.bn2.double()
 
-        nn.init.xavier_normal(self.fc2.weight)
-        nn.init.xavier_normal(self.fc1.weight)
+        nn.init.xavier_normal(self.fc2.weight, gain=0.01)
+        nn.init.xavier_normal(self.fc1.weight, gain=0.01)
+        # nn.init.xavier_normal(self.bn1.weight, gain=0.01)
+        # nn.init.xavier_normal(self.bn2.weight, gain=0.01)
 
     @classmethod
     def to_np(cls, x):
@@ -80,12 +82,14 @@ class DriverClassifier(nn.Module):
         out = self.sigmoid(out)
         return out
 
-    def predict(self, input_, use_gpu=True):
+    def predict(self, input_, use_gpu=True, return_classes=True):
         if isinstance(input_, np.ndarray):
             input_ = self.to_tensor(input_)
         if not isinstance(input_, Variable):
             input_ = self.to_var(input_, use_gpu=use_gpu)
         predictions = self.__call__(input_)
+        if not return_classes:
+            return predictions
         pred_y = self._get_classes(predictions)
         return pred_y
 
@@ -148,8 +152,8 @@ class DriverClassifier(nn.Module):
             pred_y = self.predict(inputs)
             target_y = self.to_np(labels).squeeze()
 
-            np.append(all_labels, target_y)
-            np.append(all_predictions, pred_y)
+            all_labels = np.append(all_labels, target_y)
+            all_predictions = np.append(all_predictions, pred_y)
         accuracy, f1_score, roc_auc = self._compute_metrics(all_labels, all_predictions, None, save=False)
         return accuracy, f1_score, roc_auc
 
@@ -162,7 +166,7 @@ class DriverClassifier(nn.Module):
                 inputs, labels = self._get_inputs(data_iter)
 
                 optimizer.zero_grad()
-                predictions = self.__call__(inputs)
+                predictions = self.predict(inputs, return_classes=False)
                 loss = loss_fn(predictions, labels)
                 loss.backward()
                 optimizer.step()
@@ -199,16 +203,19 @@ class DriverClassifier(nn.Module):
 if __name__ == "__main__":
     from solution.dataset import DriverDataset, ToTensor
     from torch.utils.data import DataLoader
+    from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-    transformed_dataset = DriverDataset("../data/for_train.csv", transform=ToTensor())
-    validation_dataset = DriverDataset("../data/for_validation.csv", transform=ToTensor())
+    scaler = StandardScaler()
+
+    transformed_dataset = DriverDataset("../data/for_train.csv", scaler=scaler, learn=True, transform=ToTensor())
+    validation_dataset = DriverDataset("../data/for_validation.csv", scaler=scaler, learn=False, transform=ToTensor())
 
     dataloader = DataLoader(transformed_dataset, batch_size=512, shuffle=False, num_workers=6)
     val_dataloader = DataLoader(validation_dataset, batch_size=128, shuffle=False, num_workers=6)
 
     main_logger = Logger("../logs")
 
-    net = DriverClassifier()
+    net = DriverClassifier(transformed_dataset.num_features)
     net.show_env_info()
     if torch.cuda.is_available():
         net.cuda()
