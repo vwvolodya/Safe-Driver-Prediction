@@ -1,14 +1,28 @@
-# Code referenced from https://gist.github.com/gyglim/1f8dfb1b5c82627ae3efcfbbadb9f514
 import six
 import tensorflow as tf
 import numpy as np
 import scipy.misc
+import os
+import shutil
 
 
 class Logger(object):
     def __init__(self, log_dir):
         """Create a summary writer logging to log_dir."""
+        # self._empty_folder(log_dir)
         self.writer = tf.summary.FileWriter(log_dir)
+
+    @classmethod
+    def _empty_folder(cls, folder):
+        for the_file in os.listdir(folder):
+            file_path = os.path.join(folder, the_file)
+            try:
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+            except Exception as e:
+                print(e)
 
     def scalar_summary(self, tag, value, step):
         """Log a scalar variable."""

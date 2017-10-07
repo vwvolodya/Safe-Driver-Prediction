@@ -15,8 +15,9 @@ class ToTensor:
 
 
 class DriverDataset(Dataset):
-    def __init__(self, path, transform=None):
+    def __init__(self, path, transform=None, inference_only=False):
         self.transform = transform
+        self._inference_only = inference_only
         self.data = pd.read_csv(path)
         self.array = self.data.as_matrix()
         self.names = "id,target,ps_ind_01,ps_ind_02_cat,ps_ind_03,ps_ind_04_cat,ps_ind_05_cat,ps_ind_06_bin," \
@@ -38,7 +39,6 @@ class DriverDataset(Dataset):
     def __getitem__(self, idx):
         row = self.array[idx, :]
         target_idx = self.mapping[self.target_column]
-        y = np.array([row[target_idx]])
         feature = []
         for col in self.names:
             if col in self.exclude_columns:
@@ -46,7 +46,11 @@ class DriverDataset(Dataset):
             index = self.mapping[col]
             feature.append(row[index])
         x = np.array(feature)
-        item = {"inputs": x, "labels": y}
+        item = {"inputs": x}
+        if not self._inference_only:
+            y = np.array([row[target_idx]])
+            item["labels"] = y
+
         if self.transform:
             item = self.transform(item)
         return item
