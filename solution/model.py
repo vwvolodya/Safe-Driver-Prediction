@@ -77,7 +77,7 @@ class DriverModel(nn.Module):
             input_ = self.to_tensor(input_)
         input_ = self.to_var(input_, use_gpu=use_gpu)
         predictions = self.__call__(input_)
-        predictions - self.to_np(predictions)
+        predictions = self.to_np(predictions)
         return predictions
 
     def _log_data(self, data_dict):
@@ -156,7 +156,7 @@ if __name__ == "__main__":
     transformed_dataset = DriverDataset("../data/for_train.csv", transform=ToTensor())
     dataloader = DataLoader(transformed_dataset, batch_size=128, shuffle=False, num_workers=1)
 
-    net = DriverModel("/tmp")
+    net = DriverModel("../logs")
     net.show_env_info()
     if torch.cuda.is_available():
         net.cuda()
