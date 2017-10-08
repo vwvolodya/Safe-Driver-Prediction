@@ -10,7 +10,7 @@ from sklearn import metrics
 
 
 class DriverClassifier(nn.Module):
-    def __init__(self, input_size, seed=1010101):
+    def __init__(self, input_size, num_classes, seed=1010101):
 
         self._metrics = defaultdict(list)
         self._epoch = 0
@@ -18,14 +18,13 @@ class DriverClassifier(nn.Module):
         if torch.cuda.is_available():
             torch.cuda.manual_seed(seed)
         super().__init__()
-        hidden_size = 25
-        output_size = 1
+        hidden_size = 100
 
         self.relu = nn.ReLU()
         self.sigmoid = torch.nn.Sigmoid()
 
         self.fc1 = nn.Linear(input_size, hidden_size, bias=False)
-        self.fc2 = nn.Linear(hidden_size, output_size, bias=False)
+        self.fc2 = nn.Linear(hidden_size, num_classes, bias=False)
 
         self.bn1 = nn.BatchNorm1d(input_size)
         self.bn2 = nn.BatchNorm1d(hidden_size)
@@ -106,6 +105,8 @@ class DriverClassifier(nn.Module):
     def _compute_metrics(self, target_y, pred_y, loss, save=True):
         accuracy = metrics.accuracy_score(target_y, pred_y)
         f1_score = metrics.f1_score(target_y, pred_y)
+        recall = metrics.recall_score(target_y, pred_y)
+        presicion = metrics.precision_score(target_y, pred_y)
         roc_auc = None
         try:
             roc_auc = metrics.roc_auc_score(target_y, pred_y)
@@ -115,9 +116,11 @@ class DriverClassifier(nn.Module):
             self._metrics["roc"].append(roc_auc)
         if save:
             self._metrics["f1"].append(f1_score)
+            self._metrics["pres"].append(presicion)
+            self._metrics["recall"].append(recall)
             self._metrics["acc"].append(accuracy)
             self._metrics["loss"].append(loss)
-        return accuracy, f1_score, roc_auc
+        return accuracy, f1_score, roc_auc, presicion, recall
 
     def _log_and_reset(self, logger, data=None):
         if not data:
@@ -154,8 +157,8 @@ class DriverClassifier(nn.Module):
 
             all_labels = np.append(all_labels, target_y)
             all_predictions = np.append(all_predictions, pred_y)
-        accuracy, f1_score, roc_auc = self._compute_metrics(all_labels, all_predictions, None, save=False)
-        return accuracy, f1_score, roc_auc
+        accuracy, f1_score, roc_auc, pres, rec = self._compute_metrics(all_labels, all_predictions, None, save=False)
+        return accuracy, f1_score, roc_auc, pres, rec
 
     def fit(self, optimizer, loss_fn, data_loader, validation_data_loader, num_epochs, logger, verbose=True):
         iter_per_epoch = len(data_loader)
@@ -174,13 +177,14 @@ class DriverClassifier(nn.Module):
                 pred_y = self._get_classes(predictions)
                 target_y = self.to_np(labels).squeeze()
 
-                accuracy, f1_score, roc_auc = self._compute_metrics(target_y, pred_y, loss.data[0])
+                accuracy, f1_score, roc_auc, pres, rec = self._compute_metrics(target_y, pred_y, loss.data[0])
 
-            val_acc, val_f1, val_roc = self.evaluate(validation_data_loader)
+            val_acc, val_f1, val_roc, val_pres, val_rec = self.evaluate(validation_data_loader)
             if verbose:
                 print('Step [%d/%d], Loss: %.4f, Acc: %.2f' % (e + 1, num_epochs, loss.data[0], accuracy))
             self._log_and_reset(logger)
-            self._log_and_reset(logger, data={"val_acc": val_acc, "val_f1": val_f1, "val_roc": val_roc})
+            self._log_and_reset(logger, data={"val_acc": val_acc, "val_f1": val_f1, "val_roc": val_roc,
+                                              "val_pres": val_pres, "val_recall": val_rec})
             self.save("../models/model_%s.mdl" % e)
 
     def save(self, path):
@@ -203,19 +207,19 @@ class DriverClassifier(nn.Module):
 if __name__ == "__main__":
     from solution.dataset import DriverDataset, ToTensor
     from torch.utils.data import DataLoader
-    from sklearn.preprocessing import OneHotEncoder, StandardScaler
+    from sklearn.preprocessing import StandardScaler
 
     scaler = StandardScaler()
 
-    transformed_dataset = DriverDataset("../data/for_train.csv", scaler=scaler, learn=True, transform=ToTensor())
-    validation_dataset = DriverDataset("../data/for_validation.csv", scaler=scaler, learn=False, transform=ToTensor())
+    transformed_dataset = DriverDataset("../data/for_train.csv", scaler=scaler, is_train=True, transform=ToTensor())
+    validation_dataset = DriverDataset("../data/for_validation.csv", scaler=scaler, is_train=False, transform=ToTensor())
 
-    dataloader = DataLoader(transformed_dataset, batch_size=512, shuffle=False, num_workers=6)
+    dataloader = DataLoader(transformed_dataset, batch_size=32768, shuffle=True, num_workers=6)
     val_dataloader = DataLoader(validation_dataset, batch_size=128, shuffle=False, num_workers=6)
 
     main_logger = Logger("../logs")
 
-    net = DriverClassifier(transformed_dataset.num_features)
+    net = DriverClassifier(transformed_dataset.num_features, 1)
     net.show_env_info()
     if torch.cuda.is_available():
         net.cuda()
@@ -223,6 +227,6 @@ if __name__ == "__main__":
     loss_func = torch.nn.BCELoss()
     if torch.cuda.is_available():
         loss_func.cuda()
-    optim = torch.optim.Adam(net.parameters())
+    optim = torch.optim.Adam(net.parameters(), lr=0.1)
     net.fit(optim, loss_func, dataloader, val_dataloader, 50, logger=main_logger, verbose=False)
     # net.save("models/model.bin")

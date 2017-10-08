@@ -15,12 +15,9 @@ class ToTensor:
 
 
 class DriverDataset(Dataset):
-    def __init__(self, path, scaler=None, learn=True, transform=None, inference_only=False):
+    def __init__(self, path, scaler=None, is_train=True, transform=None, inference_only=False):
         self.transform = transform
         self._inference_only = inference_only
-        data = pd.read_csv(path)
-        self.shape = data.shape
-        self.scaler = scaler
         self.names = "id,target,ps_ind_01,ps_ind_02_cat,ps_ind_03,ps_ind_04_cat,ps_ind_05_cat,ps_ind_06_bin," \
                      "ps_ind_07_bin,ps_ind_08_bin,ps_ind_09_bin,ps_ind_10_bin,ps_ind_11_bin,ps_ind_12_bin," \
                      "ps_ind_13_bin,ps_ind_14,ps_ind_15,ps_ind_16_bin,ps_ind_17_bin,ps_ind_18_bin,ps_reg_01," \
@@ -35,10 +32,22 @@ class DriverDataset(Dataset):
         self.exclude_columns = {"id", "target"}
         self.category_columns = [i for i in self.names if "cat" in i]
         self.binary_columns = [i for i in self.names if "bin" in i]
-        self.columns_for_scaling = set(self.names) - self.exclude_columns - set(self.category_columns) -\
+        self.columns_for_scaling = set(self.names) - self.exclude_columns - set(self.category_columns) - \
                                    set(self.binary_columns)
         self.columns_for_scaling = list(self.columns_for_scaling)
         self.columns_for_scaling.sort()
+
+        data = pd.read_csv(path)
+        magic_multiplier = 26       # this is because we have 3.5 % of true labels and we want wo make dataset balanced
+        if is_train:
+            # augment data to change balance.
+            true_rows = data[self.target_column] == 1
+            slice = data[true_rows]
+            data = data.append([slice] * magic_multiplier, ignore_index=True)
+            data = data.sample(frac=1)
+
+        self.shape = data.shape
+        self.scaler = scaler
 
         self.y = data[self.target_column].as_matrix()
 
@@ -46,7 +55,7 @@ class DriverDataset(Dataset):
         categorical = pd.get_dummies(new)
         scaled = data[self.columns_for_scaling]
         if scaler:
-            if learn:
+            if is_train:
                 scaler.fit(scaled)
             scaled = scaler.transform(scaled)
         if isinstance(scaled, pd.DataFrame):
@@ -58,6 +67,7 @@ class DriverDataset(Dataset):
         binary_matrix = binary.as_matrix()
         self.x = np.column_stack((categorical_matrix, scaled_matrix, binary_matrix))
         self.num_features = self.x.shape[1]
+        self.__print_stats(data)
 
     def __len__(self):
         return self.shape[0]
@@ -73,9 +83,17 @@ class DriverDataset(Dataset):
             item = self.transform(item)
         return item
 
+    def __print_stats(self, data):
+        positive = data[self.target_column]
+        all_pos = sum(positive)
+        all_items = len(self)
+        percentage = 1.0 * all_pos / all_items
+        print("There are %s positive examples" % percentage)
+        print("Total number of examples is %s", all_items)
+
 
 if __name__ == "__main__":
-    transformed_dataset = DriverDataset("../data/for_test.csv", transform=ToTensor())
+    transformed_dataset = DriverDataset("../data/for_train.csv", transform=ToTensor())
     for i in range(len(transformed_dataset)):
         sample = transformed_dataset[i]
         print(i, sample['inputs'].size(), sample['labels'].size())
