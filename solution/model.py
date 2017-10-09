@@ -10,7 +10,7 @@ from sklearn import metrics
 
 
 class DriverClassifier(nn.Module):
-    def __init__(self, input_size, num_classes, seed=1010101):
+    def __init__(self, layer_sizes: list, num_classes: int, seed=1010101):
 
         self._metrics = defaultdict(list)
         self._epoch = 0
@@ -18,24 +18,24 @@ class DriverClassifier(nn.Module):
         if torch.cuda.is_available():
             torch.cuda.manual_seed(seed)
         super().__init__()
-        hidden_size = 100
 
         self.relu = nn.ReLU()
         self.sigmoid = torch.nn.Sigmoid()
 
-        self.fc1 = nn.Linear(input_size, hidden_size, bias=False)
-        self.fc2 = nn.Linear(hidden_size, num_classes, bias=False)
+        self.layers = []
+        for i in range(len(layer_sizes) - 1):       # last layer has different activation
+            print("layer_size", layer_sizes[i], layer_sizes[i + 1])
+            bn = nn.BatchNorm1d(layer_sizes[i])
+            bn.cuda()
+            fc = nn.Linear(layer_sizes[i], layer_sizes[i + 1], bias=False)
+            fc.cuda()
+            nn.init.xavier_normal(fc.weight, gain=0.1)
+            self.layers.append((bn, fc))
 
-        self.bn1 = nn.BatchNorm1d(input_size)
-        self.bn2 = nn.BatchNorm1d(hidden_size)
+        self.last = nn.Linear(layer_sizes[-1], num_classes)
 
         # self.bn1.double()     can convert full model to double.
         # self.bn2.double()
-
-        nn.init.xavier_normal(self.fc2.weight, gain=0.01)
-        nn.init.xavier_normal(self.fc1.weight, gain=0.01)
-        # nn.init.xavier_normal(self.bn1.weight, gain=0.01)
-        # nn.init.xavier_normal(self.bn2.weight, gain=0.01)
 
     @classmethod
     def to_np(cls, x):
@@ -73,11 +73,15 @@ class DriverClassifier(nn.Module):
         print("CUDA is available", use_cuda)
 
     def forward(self, x):
-        out = self.bn1(x)
-        out = self.fc1(out)
-        out = self.relu(out)
-        out = self.bn2(out)
-        out = self.fc2(out)
+        for i, el in enumerate(self.layers):
+            bn, fc = el
+            if i == 0:
+                out = bn(x)
+            else:
+                out = bn(out)
+            out = fc(out)
+            out = self.relu(out)
+        out = self.last(out)
         out = self.sigmoid(out)
         return out
 
@@ -219,7 +223,8 @@ if __name__ == "__main__":
 
     main_logger = Logger("../logs")
 
-    net = DriverClassifier(transformed_dataset.num_features, 1)
+    input_layer = transformed_dataset.num_features
+    net = DriverClassifier([input_layer, input_layer // 2, input_layer // 4], 1)
     net.show_env_info()
     if torch.cuda.is_available():
         net.cuda()
@@ -227,6 +232,6 @@ if __name__ == "__main__":
     loss_func = torch.nn.BCELoss()
     if torch.cuda.is_available():
         loss_func.cuda()
-    optim = torch.optim.Adam(net.parameters(), lr=0.1)
-    net.fit(optim, loss_func, dataloader, val_dataloader, 50, logger=main_logger, verbose=False)
+    optim = torch.optim.Adam(net.parameters(), lr=0.03)
+    net.fit(optim, loss_func, dataloader, val_dataloader, 500, logger=main_logger, verbose=False)
     # net.save("models/model.bin")
