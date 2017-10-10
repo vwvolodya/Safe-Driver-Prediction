@@ -26,13 +26,16 @@ class DriverClassifier(nn.Module):
         for i in range(len(layer_sizes) - 1):       # last layer has different activation
             print("layer_size", layer_sizes[i], layer_sizes[i + 1])
             bn = nn.BatchNorm1d(layer_sizes[i])
-            bn.cuda()
             fc = nn.Linear(layer_sizes[i], layer_sizes[i + 1], bias=False)
+            setattr(self, "bn_%s" % i, bn)
+            setattr(self, "fc_%s" % i, fc)
+            bn.cuda()
             fc.cuda()
-            nn.init.xavier_normal(fc.weight, gain=0.1)
+            nn.init.xavier_normal(fc.weight, gain=0.005)
             self.layers.append((bn, fc))
 
         self.last = nn.Linear(layer_sizes[-1], num_classes)
+        nn.init.xavier_normal(self.last.weight, gain=0.005)
 
         # self.bn1.double()     can convert full model to double.
         # self.bn2.double()
@@ -187,8 +190,8 @@ class DriverClassifier(nn.Module):
             if verbose:
                 print('Step [%d/%d], Loss: %.4f, Acc: %.2f' % (e + 1, num_epochs, loss.data[0], accuracy))
             self._log_and_reset(logger)
-            self._log_and_reset(logger, data={"val_acc": val_acc, "val_f1": val_f1, "val_roc": val_roc,
-                                              "val_pres": val_pres, "val_recall": val_rec})
+            self._log_and_reset(logger, data={"val/acc": val_acc, "val/f1": val_f1, "val/roc": val_roc,
+                                              "val/pres": val_pres, "val/recall": val_rec})
             self.save("../models/model_%s.mdl" % e)
 
     def save(self, path):
@@ -224,7 +227,7 @@ if __name__ == "__main__":
     main_logger = Logger("../logs")
 
     input_layer = transformed_dataset.num_features
-    net = DriverClassifier([input_layer, input_layer // 2, input_layer // 4], 1)
+    net = DriverClassifier([input_layer, input_layer // 3, input_layer // 4, input_layer // 5], 1)
     net.show_env_info()
     if torch.cuda.is_available():
         net.cuda()
@@ -232,6 +235,5 @@ if __name__ == "__main__":
     loss_func = torch.nn.BCELoss()
     if torch.cuda.is_available():
         loss_func.cuda()
-    optim = torch.optim.Adam(net.parameters(), lr=0.03)
-    net.fit(optim, loss_func, dataloader, val_dataloader, 500, logger=main_logger, verbose=False)
-    # net.save("models/model.bin")
+    optim = torch.optim.Adam(net.parameters(), lr=0.003)
+    net.fit(optim, loss_func, dataloader, val_dataloader, 2500, logger=main_logger, verbose=False)
