@@ -237,3 +237,4 @@ if __name__ == "__main__":
         loss_func.cuda()
     optim = torch.optim.Adam(net.parameters(), lr=0.003)
     net.fit(optim, loss_func, dataloader, val_dataloader, 2500, logger=main_logger, verbose=False)
+    net.eval()

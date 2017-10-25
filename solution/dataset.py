@@ -27,6 +27,31 @@ class DriverDataset(Dataset):
                      "ps_calc_05,ps_calc_06,ps_calc_07,ps_calc_08,ps_calc_09,ps_calc_10,ps_calc_11,ps_calc_12," \
                      "ps_calc_13,ps_calc_14,ps_calc_15_bin,ps_calc_16_bin,ps_calc_17_bin,ps_calc_18_bin," \
                      "ps_calc_19_bin,ps_calc_20_bin".split(",")
+        scaling_ind = [
+            "ps_ind_01", "ps_ind_03", "ps_ind_14", "ps_ind_15"
+        ]
+        categorical_ind = [
+            "ps_ind_02_cat", "ps_ind_04_cat", "ps_ind_05_cat"
+        ]
+        # total 18 ind features. 3 categorical, 11 binary , 4 numerical
+
+        # reg 3 features. ps_reg_03 may need scaling. values like 1.49. 3 numerical features
+
+        categorical_car = [
+            "ps_car_01_cat", "ps_car_02_cat", "ps_car_03_cat", "ps_car_04_cat", "ps_car_05_cat", "ps_car_06_cat",
+            "ps_car_07_cat", "ps_car_08_cat", "ps_car_09_cat", "ps_car_10_cat",
+            "ps_car_11_cat",    # this feature has the most categories. ( > 100 )
+        ]
+        scaling_car = [
+            "ps_car_11", "ps_car_15"
+        ]
+        # total 16 features / 5 numeric 11 categorical
+        scaling_calc = [
+            "ps_calc_04", "ps_calc_05", "ps_calc_06", "ps_calc_07", "ps_calc_08", "ps_calc_09", "ps_calc_10",
+            "ps_calc_11", "ps_calc_12", "ps_calc_13", "ps_calc_14"
+        ]
+        # total 20 features. / 14 numeric, 6 binary
+
         self.mapping = {name: i + 1 for i, name in enumerate(self.names)}
         self.target_column = "target"
         self.exclude_columns = {"id", "target"}
@@ -38,7 +63,7 @@ class DriverDataset(Dataset):
         self.columns_for_scaling.sort()
 
         data = pd.read_csv(path)
-        magic_multiplier = 26       # this is because we have 3.5 % of true labels and we want wo make dataset balanced
+        magic_multiplier = 10       # 26 is because we have 3.5 % of true labels and we want wo make dataset balanced
         if is_train:
             # augment data to change balance.
             true_rows = data[self.target_column] == 1
