@@ -1,17 +1,8 @@
-import os
-import random
-import torch
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
+from base.dataset import ToTensor
 # from torchvision import transforms, utils
-
-
-class ToTensor:
-    def __call__(self, x):
-        result = {k: torch.from_numpy(v) for k, v in x.items()}
-        return result
 
 
 class DriverDataset(Dataset):
