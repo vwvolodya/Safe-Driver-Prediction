@@ -6,4 +6,5 @@ env/
 venv/
 *.so
 logs/
+models/
 for_*.csv

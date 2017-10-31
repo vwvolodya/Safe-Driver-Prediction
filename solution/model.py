@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from collections import defaultdict
 from torch.autograd import Variable
 from base.logger import Logger
 from base.model import BaseModel
@@ -11,12 +10,6 @@ from sklearn import metrics
 
 class DriverClassifier(BaseModel):
     def __init__(self, layer_sizes: list, num_classes: int, seed=1010101):
-
-        self._metrics = defaultdict(list)
-        self._epoch = 0
-        torch.manual_seed(seed)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed(seed)
         super().__init__()
 
         self.relu = nn.ReLU()

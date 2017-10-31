@@ -8,7 +8,12 @@ from collections import defaultdict
 
 
 class BaseModel(nn.Module):
-    def __init__(self):
+    def __init__(self, seed=10101):
+        self._metrics = defaultdict(list)
+        self._epoch = 0
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(seed)
         super().__init__()
 
     @abc.abstractmethod
@@ -96,7 +101,7 @@ class BaseModel(nn.Module):
         losses = []
         for i in range(iter_per_epoch):
             inputs, targets = self._get_inputs(iterator)
-            pred_y, _ = self.predict(inputs)
+            pred_y, extra = self.predict(inputs)
             target_y = self.to_np(targets).squeeze()
             if loss_fn:
                 loss = loss_fn(pred_y, targets)
