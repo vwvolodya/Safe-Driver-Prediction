@@ -8,3 +8,4 @@ venv/
 logs/
 models/
 for_*.csv
+*.npy

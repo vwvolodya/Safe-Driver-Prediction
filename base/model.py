@@ -21,7 +21,7 @@ class BaseModel(nn.Module):
         pass
 
     @abc.abstractmethod
-    def predict(self, x):
+    def predict(self, x, **kwargs):
         pass
 
     @classmethod
@@ -92,7 +92,7 @@ class BaseModel(nn.Module):
         else:
             self._log_data(logger, data)
 
-    def evaluate(self, loader, loss_fn=None, switch_to_eval=False):
+    def evaluate(self, loader, loss_fn=None, switch_to_eval=False, **kwargs):
         if switch_to_eval:
             self.eval()
         iterator = iter(loader)
@@ -102,7 +102,7 @@ class BaseModel(nn.Module):
         losses = []
         for i in range(iter_per_epoch):
             inputs, targets = self._get_inputs(iterator)
-            pred_y, extra = self.predict(inputs)
+            pred_y, extra = self.predict(inputs, **kwargs)
             target_y = self.to_np(targets).squeeze()
             if loss_fn:
                 loss = loss_fn(pred_y, targets)

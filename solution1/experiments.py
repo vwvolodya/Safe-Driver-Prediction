@@ -40,10 +40,15 @@ def calc_mse(data_loader, model, loss_fn):
         inputs, targets, y = _get_inputs(data_iter)
 
         predictions, _ = model.predict(inputs)
+        features = model.predict_encoder(inputs)
+        np_features = features.data.cpu().numpy()
+        # code specific for batch_size = 1
         loss = loss_fn(predictions, targets)
         loss1 = loss.data.cpu().numpy()
         y = y.numpy()
-        losses.append([loss1[0], y[0][0]])
+        first_part = [i for i in np_features[0]]
+        second = first_part + [loss1[0], y[0][0]]
+        losses.append(second)
     return losses
 
 
@@ -63,7 +68,7 @@ if __name__ == "__main__":
                                        transform=ToTensor())
     dataloader = DataLoader(transformed_dataset, batch_size=1, shuffle=False, num_workers=12)
     val_dataloader = DataLoader(validation_dataset, batch_size=1, shuffle=False, num_workers=1)
-    test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=1)
+    # test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=1)
 
     autoenc = Autoencoder.load("models/autoenc_100.mdl")
     autoenc.eval()
@@ -86,11 +91,11 @@ if __name__ == "__main__":
     # np.save("test.npa", test_losses)
     np.save("validation", val_losses)
 
-    train_df = pd.DataFrame(train_losses, columns=["mse", "y"])
-    train_df["y"] = train_df["y"].astype("object")
-
-    val_df = pd.DataFrame(val_losses, columns=["mse", "y"])
-    val_df["y"] = val_df["y"].astype("object")
-
-    plot_data(train_df["mse"], train_df["y"], "Train")
-    plot_data(val_df["mse"], val_df["y"], "Val")
+    # train_df = pd.DataFrame(train_losses, columns=["mse", "y"])
+    # train_df["y"] = train_df["y"].astype("object")
+    #
+    # val_df = pd.DataFrame(val_losses, columns=["mse", "y"])
+    # val_df["y"] = val_df["y"].astype("object")
+    #
+    # plot_data(train_df["mse"], train_df["y"], "Train")
+    # plot_data(val_df["mse"], val_df["y"], "Val")
