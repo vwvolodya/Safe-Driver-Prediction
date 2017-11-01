@@ -69,6 +69,7 @@ class DriverDataset(Dataset):
         categorical_matrix = categorical.as_matrix()
         binary_matrix = binary.as_matrix()
         self.x = np.column_stack((categorical_matrix, binary_matrix, scaled.as_matrix()))
+        self.y = data[self.target_column].as_matrix()
         if top:
             self.x = self.x[:top, :]        # get only top N samples
         self.num_features = self.x.shape[1]
@@ -80,7 +81,8 @@ class DriverDataset(Dataset):
 
     def __getitem__(self, idx):
         x = self.x[idx, :]
-        item = {"inputs": x, "targets": x}
+        y = np.array([self.y[idx]])
+        item = {"inputs": x, "targets": x, "y": y}
 
         if self.transform:
             item = self.transform(item)

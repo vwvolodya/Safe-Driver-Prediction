@@ -39,6 +39,7 @@ class BaseModel(nn.Module):
 
     @classmethod
     def to_np(cls, x):
+        # convert Variable to numpy array
         return x.data.cpu().numpy()
 
     @classmethod
@@ -50,7 +51,7 @@ class BaseModel(nn.Module):
     @classmethod
     def to_tensor(cls, x):
         # noinspection PyUnresolvedReferences
-        tensor = torch.from_numpy(x)
+        tensor = torch.from_numpy(x).float()
         return tensor
 
     def _avg_metrics(self):

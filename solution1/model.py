@@ -45,6 +45,10 @@ class Autoencoder(BaseModel):
         x = self.decoder(x)
         return x
 
+    def predict_encoder(self, x):
+        y = self.encoder(x)
+        return y
+
     def predict(self, x):
         predictions = self.__call__(x)
         return predictions, None
@@ -100,8 +104,8 @@ if __name__ == "__main__":
     validation_dataset = DriverDataset("../data/for_validation.csv", is_train=False, top=top,
                                        transform=ToTensor())
 
-    dataloader = DataLoader(transformed_dataset, batch_size=4096, shuffle=True, num_workers=4)
-    val_dataloader = DataLoader(validation_dataset, batch_size=1024, shuffle=False, num_workers=1)
+    dataloader = DataLoader(transformed_dataset, batch_size=4096, shuffle=True, num_workers=12)
+    val_dataloader = DataLoader(validation_dataset, batch_size=4096, shuffle=False, num_workers=1)
 
     main_logger = Logger("../logs")
 
@@ -115,5 +119,5 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         loss_func.cuda()
     optim = torch.optim.Adam(net.parameters(), lr=0.0002)
-    net.fit(optim, loss_func, dataloader, val_dataloader, 50, logger=main_logger, verbose=False)
+    net.fit(optim, loss_func, dataloader, val_dataloader, 110, logger=main_logger, verbose=False)
 
