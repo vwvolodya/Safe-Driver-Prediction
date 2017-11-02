@@ -9,7 +9,7 @@ from collections import defaultdict
 
 class BaseModel(nn.Module):
     def __init__(self, seed=10101):
-        self._metrics = defaultdict(list)
+        self._predictions = defaultdict(list)
         self._epoch = 0
         torch.manual_seed(seed)
         if torch.cuda.is_available():
@@ -30,11 +30,11 @@ class BaseModel(nn.Module):
         pass
 
     @abc.abstractmethod
-    def _compute_metrics(self, target_y, pred_y, loss, save=True):
-        pass
+    def _compute_metrics(self, target_y, pred_y, predictions_are_classes=True, training=True):
+        return {}
 
     @abc.abstractmethod
-    def fit(self, optimizer, loss_fn, data_loader, validation_data_loader, num_epochs, logger, verbose=True):
+    def fit(self, optimizer, loss_fn, data_loader, validation_data_loader, num_epochs, logger):
         pass
 
     @classmethod
@@ -54,14 +54,15 @@ class BaseModel(nn.Module):
         tensor = torch.from_numpy(x).float()
         return tensor
 
-    def _avg_metrics(self):
-        res = {}
-        for k, v in self._metrics.items():
-            res[k] = sum(v) / len(v)
-        return res
+    def _accumulate_results(self, target_y, pred_y, loss=None, **kwargs):
+        self._predictions["target"].extend(target_y)
+        self._predictions["predicted"].extend(pred_y)
+        if loss is not None:
+            self._predictions["train_loss"].append(loss)
+        for k, v in kwargs.items():
+            self._predictions[k].extend(v)
 
-    @classmethod
-    def show_env_info(cls):
+    def show_env_info(self):
         print('__Python VERSION:', sys.version)
         print('__CUDA VERSION')
         print('__CUDNN VERSION:', torch.backends.cudnn.version())
@@ -72,6 +73,8 @@ class BaseModel(nn.Module):
         print("Numpy: ", np.__version__)
         use_cuda = torch.cuda.is_available()
         print("CUDA is available", use_cuda)
+        print("----------==================------------")
+        print(repr(self))
 
     def _log_data(self, logger, data_dict):
         for tag, value in data_dict.items():
@@ -83,37 +86,10 @@ class BaseModel(nn.Module):
             logger.histo_summary(tag, self.to_np(value), self._epoch + 1)
             logger.histo_summary(tag + '/grad', self.to_np(value.grad), self._epoch + 1)
 
-    def _log_and_reset(self, logger, data=None):
-        if not data:
-            averaged = self._avg_metrics()
-            self._log_data(logger, averaged)
+    def _log_and_reset(self, logger, data, log_grads=True):
+        self._log_data(logger, data)
+        if log_grads:
             self._log_grads(logger)
-            self._metrics = defaultdict(list)
-        else:
-            self._log_data(logger, data)
-
-    def evaluate(self, loader, loss_fn=None, switch_to_eval=False, **kwargs):
-        if switch_to_eval:
-            self.eval()
-        iterator = iter(loader)
-        iter_per_epoch = len(loader)
-        all_predictions = np.array([])
-        all_targets = np.array([])
-        losses = []
-        for i in range(iter_per_epoch):
-            inputs, targets = self._get_inputs(iterator)
-            pred_y, extra = self.predict(inputs, **kwargs)
-            target_y = self.to_np(targets).squeeze()
-            if loss_fn:
-                loss = loss_fn(pred_y, targets)
-                losses.append(loss.data[0])
-            all_targets = np.append(all_targets, target_y)
-            all_predictions = np.append(all_predictions, self.to_np(pred_y))
-        computed_metrics = self._compute_metrics(all_targets, all_predictions, losses, save=False)
-        if switch_to_eval:
-            # switch back to train
-            self.train()
-        return computed_metrics
 
     def save(self, path):
         torch.save(self, path)

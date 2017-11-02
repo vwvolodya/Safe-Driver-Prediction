@@ -6,13 +6,14 @@ from base.logger import Logger
 from base.model import BaseModel
 from tqdm import tqdm as progressbar
 from sklearn import metrics
+from collections import defaultdict
 
 
 class DriverClassifier(BaseModel):
-    def __init__(self, layer_sizes: list, num_classes: int, seed=1010101):
-        super().__init__()
+    def __init__(self, layer_sizes: list, num_classes: int, seed=1010101, gain=1):
+        super().__init__(seed=seed)
 
-        self.relu = nn.ReLU()
+        self.selu = nn.SELU(inplace=True)
         self.sigmoid = torch.nn.Sigmoid()
 
         self.layers = []
@@ -24,11 +25,11 @@ class DriverClassifier(BaseModel):
             setattr(self, "fc_%s" % i, fc)
             bn.cuda()
             fc.cuda()
-            nn.init.xavier_normal(fc.weight, gain=0.005)
+            nn.init.xavier_normal(fc.weight, gain=gain)
             self.layers.append((bn, fc))
 
         self.last = nn.Linear(layer_sizes[-1], num_classes)
-        nn.init.xavier_normal(self.last.weight, gain=0.005)
+        nn.init.xavier_normal(self.last.weight, gain=gain)
 
         # self.bn1.double()     can convert full model to double.
         # self.bn2.double()
@@ -41,7 +42,7 @@ class DriverClassifier(BaseModel):
             else:
                 out = bn(out)
             out = fc(out)
-            out = self.relu(out)
+            out = self.selu(out)
         out = self.last(out)
         out = self.sigmoid(out)
         return out
@@ -51,31 +52,46 @@ class DriverClassifier(BaseModel):
             input_ = self.to_tensor(input_)
         if not isinstance(input_, Variable):
             input_ = self.to_var(input_, use_gpu=use_gpu)
-        predictions = self.__call__(input_)
-        if not return_classes:
-            return predictions
-        pred_y = self._get_classes(predictions)
-        return pred_y
 
-    def _compute_metrics(self, target_y, pred_y, loss, save=True):
-        accuracy = metrics.accuracy_score(target_y, pred_y)
-        f1_score = metrics.f1_score(target_y, pred_y)
-        recall = metrics.recall_score(target_y, pred_y)
-        precision = metrics.precision_score(target_y, pred_y)
-        roc_auc = None
-        try:
-            roc_auc = metrics.roc_auc_score(target_y, pred_y)
-        except ValueError:
-            pass
+        predictions = self.__call__(input_)
+        classes = None
+        if return_classes:
+            classes = self._get_classes(predictions)
+        return predictions, classes
+
+    @classmethod
+    def _gini(cls, actual, pred, cmpcol=0, sortcol=1):
+        assert (len(actual) == len(pred))
+        all = np.asarray(np.c_[actual, pred, np.arange(len(actual))], dtype=np.float)
+        all = all[np.lexsort((all[:, 2], -1 * all[:, 1]))]
+        totalLosses = all[:, 0].sum()
+        giniSum = all[:, 0].cumsum().sum() / totalLosses
+
+        giniSum -= (len(actual) + 1) / 2.
+        return giniSum / len(actual)
+
+    @classmethod
+    def _gini_normalized(cls, a, p):
+        return cls._gini(a, p) / cls._gini(a, a)
+
+    def _compute_metrics(self, target_y, pred_y, predictions_are_classes=True, training=True):
+        prefix = "val_" if not training else ""
+        if predictions_are_classes:
+            f1_score = metrics.f1_score(target_y, pred_y, pos_label=1.0)
+            recall = metrics.recall_score(target_y, pred_y, pos_label=1.0)
+            precision = metrics.precision_score(target_y, pred_y, pos_label=1.0)
+            gini = self._gini_normalized(target_y, pred_y)
+            result = {"f1": f1_score, "precision": precision, "recall": recall, "gini": gini}
         else:
-            self._metrics["roc"].append(roc_auc)
-        if save:
-            self._metrics["f1"].append(f1_score)
-            self._metrics["pres"].append(precision)
-            self._metrics["recall"].append(recall)
-            self._metrics["acc"].append(accuracy)
-            self._metrics["loss"].append(loss)
-        return accuracy, f1_score, roc_auc, precision, recall
+            fpr, tpr, thresholds = metrics.roc_curve(target_y, pred_y, pos_label=1.0)
+            auc = metrics.auc(fpr, tpr)
+            custom_gini = 2 * auc - 1
+            result = {"auc": auc, "custom_gini": custom_gini}
+
+        final = {}
+        for k, v in result.items():
+            final[prefix + k] = v
+        return final
 
     @classmethod
     def _get_classes(cls, predictions):
@@ -86,57 +102,98 @@ class DriverClassifier(BaseModel):
     @classmethod
     def _get_inputs(cls, iterator):
         next_batch = next(iterator)  # here we assume data type torch.Tensor
-        inputs, labels = next_batch["inputs"], next_batch["labels"]
-        inputs, labels = inputs.float(), labels.float()
+        inputs, labels = next_batch["inputs"], next_batch["targets"]
         inputs, labels = cls.to_var(inputs), cls.to_var(labels)
         return inputs, labels
 
-    def fit(self, optimizer, loss_fn, data_loader, validation_data_loader, num_epochs, logger, verbose=True):
+    def evaluate(self, logger, loader, loss_fn=None, switch_to_eval=False, **kwargs):
+        # aggregate results from training epoch.
+        train_losses = self._predictions.pop("train_loss")
+        train_loss = sum(train_losses) / len(train_losses)
+        train_metrics_1 = self._compute_metrics(self._predictions["target"], self._predictions["predicted"])
+        train_metrics_2 = self._compute_metrics(self._predictions["target"], self._predictions["probs"],
+                                                predictions_are_classes=False)
+        train_metrics = {"train_loss": train_loss}
+        train_metrics.update(train_metrics_1)
+        train_metrics.update(train_metrics_2)
+
+        if switch_to_eval:
+            self.eval()
+        iterator = iter(loader)
+        iter_per_epoch = len(loader)
+        all_predictions = np.array([])
+        all_targets = np.array([])
+        all_probs = np.array([])
+        losses = []
+        for i in range(iter_per_epoch):
+            inputs, targets = self._get_inputs(iterator)
+            probs, classes = self.predict(inputs, return_classes=True)
+            target_y = self.to_np(targets).squeeze()
+            if loss_fn:
+                loss = loss_fn(probs, targets)
+                losses.append(loss.data[0])
+            probs = self.to_np(probs).squeeze()
+            all_targets = np.append(all_targets, target_y)
+            all_probs = np.append(all_probs, probs)
+            all_predictions = np.append(all_predictions, classes)
+        computed_metrics = self._compute_metrics(all_targets, all_predictions, training=False)
+        computed_metrics_1 = self._compute_metrics(all_targets, all_probs, training=False,
+                                                   predictions_are_classes=False)
+
+        val_loss = sum(losses) / len(losses)
+        computed_metrics.update({"val_loss": val_loss})
+        computed_metrics.update(computed_metrics_1)
+        if switch_to_eval:
+            # switch back to train
+            self.train()
+
+        self._log_and_reset(logger, data=train_metrics, log_grads=True)
+        self._log_and_reset(logger, data=computed_metrics, log_grads=False)
+
+        self._predictions = defaultdict(list)
+        return computed_metrics
+
+    def fit(self, optimizer, loss_fn, data_loader, validation_data_loader, num_epochs, logger):
         iter_per_epoch = len(data_loader)
         for e in progressbar(range(num_epochs)):
             self._epoch = e
             data_iter = iter(data_loader)
-            accuracy = None
+
             for i in range(iter_per_epoch):
                 inputs, labels = self._get_inputs(data_iter)
 
                 optimizer.zero_grad()
-                predictions = self.predict(inputs, return_classes=False)
+                predictions, pred_y = self.predict(inputs, return_classes=True)
                 loss = loss_fn(predictions, labels)
                 loss.backward()
                 optimizer.step()
 
-                pred_y = self._get_classes(predictions)
+                # pred_y = self._get_classes(predictions)
+                probs = self.to_np(predictions).squeeze()
                 target_y = self.to_np(labels).squeeze()
 
-                accuracy, f1_score, roc_auc, pres, rec = self._compute_metrics(target_y, pred_y, loss.data[0])
+                self._accumulate_results(target_y, pred_y, loss=loss.data[0], probs=probs)
 
-            val_acc, val_f1, val_roc, val_pres, val_rec = self.evaluate(validation_data_loader)
-            if verbose:
-                print('Step [%d/%d], Loss: %.4f, Acc: %.2f' % (e + 1, num_epochs, loss.data[0], accuracy))
-            self._log_and_reset(logger)
-            self._log_and_reset(logger, data={"val/acc": val_acc, "val/f1": val_f1, "val/roc": val_roc,
-                                              "val/pres": val_pres, "val/recall": val_rec})
+            self.evaluate(logger, validation_data_loader, loss_fn=loss_fn, switch_to_eval=True)
             self.save("models/model_%s.mdl" % e)
 
 
 if __name__ == "__main__":
     from solution.dataset import DriverDataset, ToTensor
     from torch.utils.data import DataLoader
-    from sklearn.preprocessing import StandardScaler
 
-    scaler = StandardScaler()
+    top = None
 
-    transformed_dataset = DriverDataset("../data/for_train.csv", scaler=scaler, is_train=True, transform=ToTensor())
-    validation_dataset = DriverDataset("../data/for_validation.csv", scaler=scaler, is_train=False, transform=ToTensor())
+    transformed_dataset = DriverDataset("../data/for_train.csv", is_train=True, transform=ToTensor(), top=top)
+    validation_dataset = DriverDataset("../data/for_validation.csv", is_train=False, transform=ToTensor(), top=top)
 
-    dataloader = DataLoader(transformed_dataset, batch_size=32768, shuffle=True, num_workers=6)
-    val_dataloader = DataLoader(validation_dataset, batch_size=128, shuffle=False, num_workers=6)
+    dataloader = DataLoader(transformed_dataset, batch_size=4096, shuffle=True, num_workers=6)
+    val_dataloader = DataLoader(validation_dataset, batch_size=2048, shuffle=False, num_workers=6)
 
     main_logger = Logger("../logs")
 
     input_layer = transformed_dataset.num_features
-    net = DriverClassifier([input_layer, input_layer // 3, input_layer // 4, input_layer // 5], 1)
+    net = DriverClassifier([input_layer, 50, 25, 10], 1)
     net.show_env_info()
     if torch.cuda.is_available():
         net.cuda()
@@ -144,6 +201,6 @@ if __name__ == "__main__":
     loss_func = torch.nn.BCELoss()
     if torch.cuda.is_available():
         loss_func.cuda()
-    optim = torch.optim.Adam(net.parameters(), lr=0.003)
-    net.fit(optim, loss_func, dataloader, val_dataloader, 2500, logger=main_logger, verbose=False)
-    net.eval()
+    optim = torch.optim.Adam(net.parameters(), lr=0.0003)
+    net.fit(optim, loss_func, dataloader, val_dataloader, 50, logger=main_logger)
+    print()

@@ -6,7 +6,7 @@ from base.dataset import ToTensor
 
 
 class DriverDataset(Dataset):
-    def __init__(self, path, scaler=None, is_train=True, transform=None, inference_only=False):
+    def __init__(self, path, scaler=None, is_train=True, transform=None, inference_only=False, top=None):
         self.transform = transform
         self._inference_only = inference_only
         self.names = "id,target,ps_ind_01,ps_ind_02_cat,ps_ind_03,ps_ind_04_cat,ps_ind_05_cat,ps_ind_06_bin," \
@@ -45,24 +45,22 @@ class DriverDataset(Dataset):
 
         self.mapping = {name: i + 1 for i, name in enumerate(self.names)}
         self.target_column = "target"
-        self.exclude_columns = {"id", "target"}
-        self.category_columns = [i for i in self.names if "cat" in i]
-        self.binary_columns = [i for i in self.names if "bin" in i]
+        self.exclude_columns = {"id", "target", "ps_ind_14", "ps_car_11_cat"}
+        self.category_columns = [i for i in self.names if "cat" in i and i not in self.exclude_columns]
+        self.binary_columns = [i for i in self.names if "bin" in i and i not in self.exclude_columns]
         self.columns_for_scaling = set(self.names) - self.exclude_columns - set(self.category_columns) - \
                                    set(self.binary_columns)
         self.columns_for_scaling = list(self.columns_for_scaling)
         self.columns_for_scaling.sort()
 
         data = pd.read_csv(path)
-        magic_multiplier = 10       # 26 is because we have 3.5 % of true labels and we want wo make dataset balanced
+        magic_multiplier = 8       # 26 is because we have 3.5 % of true labels and we want wo make dataset balanced
         if is_train:
             # augment data to change balance.
             true_rows = data[self.target_column] == 1
             slice = data[true_rows]
             data = data.append([slice] * magic_multiplier, ignore_index=True)
             data = data.sample(frac=1)
-
-        self.shape = data.shape
         self.scaler = scaler
 
         self.y = data[self.target_column].as_matrix()
@@ -82,7 +80,10 @@ class DriverDataset(Dataset):
         categorical_matrix = categorical.as_matrix()
         binary_matrix = binary.as_matrix()
         self.x = np.column_stack((categorical_matrix, scaled_matrix, binary_matrix))
+        if top:
+            self.x = self.x[:top, :]
         self.num_features = self.x.shape[1]
+        self.shape = self.x.shape
         self.__print_stats(data)
 
     def __len__(self):
@@ -93,7 +94,7 @@ class DriverDataset(Dataset):
         item = {"inputs": x}
         if not self._inference_only:
             y = np.array([self.y[idx]])
-            item["labels"] = y
+            item["targets"] = y
 
         if self.transform:
             item = self.transform(item)
@@ -112,12 +113,12 @@ if __name__ == "__main__":
     transformed_dataset = DriverDataset("../data/for_train.csv", transform=ToTensor())
     for i in range(len(transformed_dataset)):
         sample = transformed_dataset[i]
-        print(i, sample['inputs'].size(), sample['labels'].size())
+        print(i, sample['inputs'].size(), sample['targets'].size())
         if i == 3:
             break
 
     dataloader = DataLoader(transformed_dataset, batch_size=4, shuffle=True, num_workers=1)
     for i_batch, sample_batched in enumerate(dataloader):
-        print(i_batch, sample_batched['inputs'].size(), sample_batched['labels'].size())
+        print(i_batch, sample_batched['inputs'].size(), sample_batched['targets'].size())
         if i_batch == 3:
             break
