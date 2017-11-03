@@ -2,7 +2,7 @@ import torch
 from torch.autograd import Variable
 from tqdm import tqdm as progressbar
 from auto_encoder.model import Autoencoder
-from auto_encoder.dataset import DriverDataset
+from auto_encoder.dataset import AutoEncoderDataset
 import numpy as np
 import pandas as pd
 
@@ -62,10 +62,10 @@ if __name__ == "__main__":
 
     top = None
 
-    transformed_dataset = DriverDataset("../data/for_train.csv", is_train=False, transform=ToTensor(), top=top)
-    test_dataset = DriverDataset("../data/for_test.csv", is_train=False, transform=ToTensor(), top=top)
-    validation_dataset = DriverDataset("../data/for_validation.csv", is_train=False, top=top,
-                                       transform=ToTensor())
+    transformed_dataset = AutoEncoderDataset("../data/for_train.csv", is_train=False, transform=ToTensor(), top=top)
+    test_dataset = AutoEncoderDataset("../data/for_test.csv", is_train=False, transform=ToTensor(), top=top)
+    validation_dataset = AutoEncoderDataset("../data/for_validation.csv", is_train=False, top=top,
+                                            transform=ToTensor())
     dataloader = DataLoader(transformed_dataset, batch_size=1, shuffle=False, num_workers=12)
     val_dataloader = DataLoader(validation_dataset, batch_size=1, shuffle=False, num_workers=1)
     # test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=1)
