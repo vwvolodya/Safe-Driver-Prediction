@@ -54,6 +54,8 @@ class DriverDataset(Dataset):
         self.columns_for_scaling.sort()
 
         data = pd.read_csv(path)
+        print("Original", data.shape)
+        self.ids = data["id"].as_matrix()
         magic_multiplier = 8       # 26 is because we have 3.5 % of true labels and we want wo make dataset balanced
         if is_train:
             # augment data to change balance.
@@ -63,7 +65,8 @@ class DriverDataset(Dataset):
             data = data.sample(frac=1)
         self.scaler = scaler
 
-        self.y = data[self.target_column].as_matrix()
+        if not inference_only:
+            self.y = data[self.target_column].as_matrix()
 
         new = pd.DataFrame(data[self.category_columns], dtype='object')
         categorical = pd.get_dummies(new)
@@ -84,7 +87,8 @@ class DriverDataset(Dataset):
             self.x = self.x[:top, :]
         self.num_features = self.x.shape[1]
         self.shape = self.x.shape
-        self.__print_stats(data)
+        if not inference_only:
+            self.__print_stats(data)
 
     def __len__(self):
         return self.shape[0]
@@ -95,6 +99,9 @@ class DriverDataset(Dataset):
         if not self._inference_only:
             y = np.array([self.y[idx]])
             item["targets"] = y
+        else:
+            item["targets"] = np.array([0])
+            item["id"] = np.array([self.ids[idx]])
 
         if self.transform:
             item = self.transform(item)

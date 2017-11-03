@@ -193,7 +193,7 @@ if __name__ == "__main__":
     main_logger = Logger("../logs")
 
     input_layer = transformed_dataset.num_features
-    net = DriverClassifier([input_layer, 50, 25, 10], 1)
+    net = DriverClassifier([input_layer, 50, 25, 10, 5], 1)
     net.show_env_info()
     if torch.cuda.is_available():
         net.cuda()
