@@ -56,8 +56,8 @@ class DriverDataset(Dataset):
         data = pd.read_csv(path)
         print("Original", data.shape)
         self.ids = data["id"].as_matrix()
-        magic_multiplier = 8       # 26 is because we have 3.5 % of true labels and we want wo make dataset balanced
         if is_train:
+            magic_multiplier = 8  # 26 is because we have 3.5 % of true labels and we want wo make dataset balanced
             # augment data to change balance.
             true_rows = data[self.target_column] == 1
             slice = data[true_rows]

@@ -1,8 +1,8 @@
 import torch
 from torch.autograd import Variable
 from tqdm import tqdm as progressbar
-from solution1.model import Autoencoder
-from solution1.dataset import DriverDataset
+from auto_encoder.model import Autoencoder
+from auto_encoder.dataset import DriverDataset
 import numpy as np
 import pandas as pd
 

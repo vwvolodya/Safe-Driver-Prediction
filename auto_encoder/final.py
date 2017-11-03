@@ -76,7 +76,7 @@ class FinalModel(BaseModel):
 
 
 if __name__ == "__main__":
-    from solution1.final_dataset import FinalDataset, ToTensor
+    from auto_encoder.final_dataset import FinalDataset, ToTensor
     from torch.utils.data import DataLoader
     top = None
 

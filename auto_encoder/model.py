@@ -96,7 +96,7 @@ class Autoencoder(BaseModel):
 
 
 if __name__ == "__main__":
-    from solution1.dataset import DriverDataset, ToTensor
+    from auto_encoder.dataset import DriverDataset, ToTensor
     from torch.utils.data import DataLoader
     top = None
 

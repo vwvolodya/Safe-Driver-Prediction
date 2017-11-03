@@ -1,9 +1,8 @@
-from solution.dataset import DriverDataset, ToTensor
-from solution.model import DriverClassifier
+from mlp.dataset import DriverDataset, ToTensor
+from mlp.model import DriverClassifier
 from torch.utils.data import DataLoader
 from tqdm import tqdm as progressbar
 import pandas as pd
-import numpy as np
 
 
 test_file = "../data/prediction/test.csv"

@@ -77,11 +77,10 @@ class DriverClassifier(BaseModel):
     def _compute_metrics(self, target_y, pred_y, predictions_are_classes=True, training=True):
         prefix = "val_" if not training else ""
         if predictions_are_classes:
-            f1_score = metrics.f1_score(target_y, pred_y, pos_label=1.0)
             recall = metrics.recall_score(target_y, pred_y, pos_label=1.0)
             precision = metrics.precision_score(target_y, pred_y, pos_label=1.0)
-            gini = self._gini_normalized(target_y, pred_y)
-            result = {"f1": f1_score, "precision": precision, "recall": recall, "gini": gini}
+            # gini = self._gini_normalized(target_y, pred_y)
+            result = {"precision": precision, "recall": recall}
         else:
             fpr, tpr, thresholds = metrics.roc_curve(target_y, pred_y, pos_label=1.0)
             auc = metrics.auc(fpr, tpr)
@@ -179,7 +178,7 @@ class DriverClassifier(BaseModel):
 
 
 if __name__ == "__main__":
-    from solution.dataset import DriverDataset, ToTensor
+    from mlp.dataset import DriverDataset, ToTensor
     from torch.utils.data import DataLoader
 
     top = None
@@ -193,7 +192,7 @@ if __name__ == "__main__":
     main_logger = Logger("../logs")
 
     input_layer = transformed_dataset.num_features
-    net = DriverClassifier([input_layer, 50, 25, 10, 5], 1)
+    net = DriverClassifier([input_layer, 50, 25, 10], 1)
     net.show_env_info()
     if torch.cuda.is_available():
         net.cuda()
@@ -201,6 +200,6 @@ if __name__ == "__main__":
     loss_func = torch.nn.BCELoss()
     if torch.cuda.is_available():
         loss_func.cuda()
-    optim = torch.optim.Adam(net.parameters(), lr=0.0003)
+    optim = torch.optim.Adam(net.parameters(), lr=0.0001)
     net.fit(optim, loss_func, dataloader, val_dataloader, 50, logger=main_logger)
     print()
