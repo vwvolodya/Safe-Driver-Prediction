@@ -1,15 +1,16 @@
 from mlp.dataset import DriverDataset, ToTensor
+from mlp.tf_dataset import TfDriverDataset, ToTensor
 from mlp.model import DriverClassifier
 from torch.utils.data import DataLoader
 from tqdm import tqdm as progressbar
 import pandas as pd
 
 
-test_file = "../data/prediction/test.csv"
+test_file = "../data/prediction/test_tf_idf.csv"
 
-test_dataset = DriverDataset(test_file, transform=ToTensor(),is_train=False, inference_only=True, top=None)
+test_dataset = TfDriverDataset(test_file, transform=ToTensor(), is_train=False, inference_only=True, top=None)
 print(test_dataset.shape)
-net = DriverClassifier.load("./models/model_12.mdl")
+net = DriverClassifier.load("./models/model_23.mdl")
 net.eval()
 
 dataloader = DataLoader(test_dataset, batch_size=256, shuffle=False, num_workers=1)

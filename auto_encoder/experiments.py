@@ -58,6 +58,9 @@ def get_encoder_repr(data_loader, model):
     result = []
     for i in progressbar(range(iter_per_epoch)):
         inputs, targets, y = _get_inputs(data_iter)
+        # targets and inputs here should be the same
+        outputs = model.predict(targets)
+        np_outputs = outputs.data.cpu().numpy()
         features = model.predict_encoder(targets)
         np_features = features.data.cpu().numpy()
         y = y.numpy()

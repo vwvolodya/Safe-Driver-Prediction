@@ -174,11 +174,11 @@ def prepare(path, is_train=True, top=None):
 
 
 if __name__ == "__main__":
-    prepare("../data/train.csv", is_train=False)
-    # data = pd.read_csv("../data/train.csv")
-    # train, other = train_test_split(data, test_size=0.1, random_state=101101)
-    # train.to_csv("../data/for_train1.csv")
-    # other.to_csv("../data/for_test1.csv")
+    # prepare("../data/tf_idf_all.csv", is_train=False)
+    data = pd.read_csv("../data/tf_idf_all.csv")
+    train, other = train_test_split(data, test_size=0.1, random_state=101101)
+    train.to_csv("../data/for_train_tf.csv")
+    other.to_csv("../data/for_test_tf.csv")
     # func(data)
 # train, other = train_test_split(data, test_size=0.2, random_state=101101)
 # validation, test = train_test_split(other, test_size=0.5, random_state=10101)

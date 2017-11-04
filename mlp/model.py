@@ -13,7 +13,7 @@ class DriverClassifier(BaseModel):
     def __init__(self, layer_sizes: list, num_classes: int, seed=1010101, gain=1):
         super().__init__(seed=seed)
 
-        self.selu = nn.SELU(inplace=True)
+        self.activation = nn.ELU(inplace=True)
         self.sigmoid = torch.nn.Sigmoid()
 
         self.layers = []
@@ -42,7 +42,7 @@ class DriverClassifier(BaseModel):
             else:
                 out = bn(out)
             out = fc(out)
-            out = self.selu(out)
+            out = self.activation(out)
         out = self.last(out)
         out = self.sigmoid(out)
         return out
@@ -178,13 +178,13 @@ class DriverClassifier(BaseModel):
 
 
 if __name__ == "__main__":
-    from mlp.dataset import DriverDataset, ToTensor
+    from mlp.tf_dataset import TfDriverDataset, ToTensor
     from torch.utils.data import DataLoader
 
     top = None
 
-    transformed_dataset = DriverDataset("../data/for_train.csv", is_train=True, transform=ToTensor(), top=top)
-    validation_dataset = DriverDataset("../data/for_validation.csv", is_train=False, transform=ToTensor(), top=top)
+    transformed_dataset = TfDriverDataset("../data/for_train_tf.csv", is_train=True, transform=ToTensor(), top=top)
+    validation_dataset = TfDriverDataset("../data/for_test_tf.csv", is_train=False, transform=ToTensor(), top=top)
 
     dataloader = DataLoader(transformed_dataset, batch_size=4096, shuffle=True, num_workers=6)
     val_dataloader = DataLoader(validation_dataset, batch_size=2048, shuffle=False, num_workers=6)
@@ -192,7 +192,7 @@ if __name__ == "__main__":
     main_logger = Logger("../logs")
 
     input_layer = transformed_dataset.num_features
-    net = DriverClassifier([input_layer, 50, 25, 10], 1)
+    net = DriverClassifier([input_layer, 40, 25, 10], 1)
     net.show_env_info()
     if torch.cuda.is_available():
         net.cuda()
@@ -200,6 +200,6 @@ if __name__ == "__main__":
     loss_func = torch.nn.BCELoss()
     if torch.cuda.is_available():
         loss_func.cuda()
-    optim = torch.optim.Adam(net.parameters(), lr=0.0001)
+    optim = torch.optim.Adam(net.parameters(), lr=0.0005)
     net.fit(optim, loss_func, dataloader, val_dataloader, 50, logger=main_logger)
     print()
