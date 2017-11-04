@@ -9,14 +9,16 @@ from collections import defaultdict
 
 
 class Autoencoder(BaseModel):
-    def __init__(self, input_size, hidden_size, encoder_features):
+    def __init__(self, input_size, hidden_size, encoder_features, model_prefix=""):
         super().__init__()
+        self._model_prefix = model_prefix
+        gain = nn.init.calculate_gain("relu")
 
         self.fc1 = nn.Linear(input_size, hidden_size, bias=True)
-        nn.init.xavier_normal(self.fc1.weight)
+        nn.init.xavier_uniform(self.fc1.weight, gain=gain)
 
         self.fc2 = nn.Linear(hidden_size, encoder_features, bias=True)
-        nn.init.xavier_normal(self.fc2.weight)
+        nn.init.xavier_uniform(self.fc2.weight, gain=gain)
 
         self.fc_02 = nn.Linear(encoder_features, hidden_size, bias=True)
         self.fc_02.weight = self.fc2.weight
@@ -24,7 +26,7 @@ class Autoencoder(BaseModel):
         self.fc_01 = nn.Linear(hidden_size, input_size, bias=True)
         self.fc_01.weight = self.fc1.weight
 
-        self.activation = nn.Tanh()
+        self.activation = nn.ReLU(inplace=True)
         self._encoder_shape = True
 
     def encoder(self, x):
@@ -45,7 +47,7 @@ class Autoencoder(BaseModel):
         out = self.fc_02(x)
         out = self.activation(out)
         out = self.fc_01(out)
-        # No activation on last layer.
+        out = self.activation(out)
         self._encoder_shape = False
         return out
 
@@ -115,7 +117,7 @@ class Autoencoder(BaseModel):
                 self._accumulate_results(targets, predictions, loss=loss.data[0])
 
             self.evaluate(logger, validation_data_loader, loss_fn=loss_fn, switch_to_eval=True)
-            self.save("./models/adam_autoenc_%s.mdl" % e)
+            self.save("./models/%sautoenc_%s.mdl" % (self._model_prefix, e))
 
     @classmethod
     def _get_inputs(cls, iterator):
@@ -129,17 +131,20 @@ if __name__ == "__main__":
     from auto_encoder.dataset import AutoEncoderDataset, ToTensor
     from torch.utils.data import DataLoader
     top = None
+    val_top = 100000
+    train_batch_size = 8192
+    test_batch_size = 8192
 
-    train_ds = AutoEncoderDataset("../data/for_train_processed.csv", is_train=True, transform=ToTensor(), top=top)
-    validation_ds = AutoEncoderDataset("../data/for_test_processed.csv", is_train=False, top=top, transform=ToTensor())
+    train_ds = AutoEncoderDataset("../data/one-hot-train.csv", is_train=True, transform=ToTensor(), top=top)
+    val_ds = AutoEncoderDataset("../data/prediction/one-hot-test.csv", is_train=False, top=val_top, transform=ToTensor())
 
-    dataloader = DataLoader(train_ds, batch_size=2048, shuffle=True, num_workers=12)
-    val_dataloader = DataLoader(validation_ds, batch_size=512, shuffle=False, num_workers=1)
+    train_loader = DataLoader(train_ds, batch_size=train_batch_size, shuffle=False, num_workers=6)
+    val_loader = DataLoader(val_ds, batch_size=test_batch_size, shuffle=False, num_workers=6)
 
     main_logger = Logger("../logs")
 
     input_layer = train_ds.num_features
-    net = Autoencoder(input_layer, int(input_layer * 1.4), 35)
+    net = Autoencoder(input_layer, int(input_layer * 1.4), 10)
     net.show_env_info()
     if torch.cuda.is_available():
         net.cuda()
@@ -147,6 +152,5 @@ if __name__ == "__main__":
     loss_func = torch.nn.MSELoss()
     if torch.cuda.is_available():
         loss_func.cuda()
-    optim = torch.optim.Adam(net.parameters(), lr=0.00005)
-    net.fit(optim, loss_func, dataloader, val_dataloader, 100, logger=main_logger)
-
+    optim = torch.optim.Adam(net.parameters(), lr=0.0001)
+    net.fit(optim, loss_func, train_loader, val_loader, 100, logger=main_logger)

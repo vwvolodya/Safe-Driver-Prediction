@@ -7,26 +7,53 @@ from collections import defaultdict
 from base.model import BaseModel
 from base.logger import Logger
 
+AUTOENCODER = None
+
+
+def get_input(data):
+    cat_input = AUTOENCODER.to_var(data)
+    categorical_x = AUTOENCODER.predict_encoder(cat_input)
+    categorical_x = AUTOENCODER.to_np(categorical_x).squeeze()
+    # x = np.concatenate((numeric_x, categorical_x))
+    categorical_x = AUTOENCODER.to_tensor(categorical_x)
+    return categorical_x
+
 
 class FinalModel(BaseModel):
-    def __init__(self, input_features, hidden, output):
+    def __init__(self, layer_sizes, num_classes):
         super().__init__()
 
-        self._tanh = nn.Tanh()
-        self._sigmoid = nn.Sigmoid()
-        fc1 = nn.Linear(input_features, hidden, bias=True)
-        nn.init.xavier_normal(fc1.weight)
-        fc2 = nn.Linear(hidden, output)
-        nn.init.xavier_normal(fc2.weight)
-        self.fc1 = fc1
-        self.fc2 = fc2
+        self.activation = nn.Tanh()
+        self.sigmoid = torch.nn.Sigmoid()
+        gain = nn.init.calculate_gain("tanh")
+
+        self.layers = []
+        for i in range(len(layer_sizes) - 1):  # last layer has different activation
+            print("layer_size", layer_sizes[i], layer_sizes[i + 1])
+            bn = nn.BatchNorm1d(layer_sizes[i])
+            fc = nn.Linear(layer_sizes[i], layer_sizes[i + 1], bias=False)
+            setattr(self, "bn_%s" % i, bn)
+            setattr(self, "fc_%s" % i, fc)
+            bn.cuda()
+            fc.cuda()
+            nn.init.xavier_normal(fc.weight, gain=gain)
+            self.layers.append((bn, fc))
+
+        self.last = nn.Linear(layer_sizes[-1], num_classes)
+        nn.init.xavier_normal(self.last.weight, gain=gain)
 
     def forward(self, x):
-        y = self.fc1(x)
-        y = self._tanh(y)
-        y = self.fc2(y)
-        y = self._sigmoid(y)
-        return y
+        for i, el in enumerate(self.layers):
+            bn, fc = el
+            if i == 0:
+                out = bn(x)
+            else:
+                out = bn(out)
+            out = fc(out)
+            out = self.activation(out)
+        out = self.last(out)
+        out = self.sigmoid(out)
+        return out
 
     def predict(self, x, return_classes=False):
         predictions = self.__call__(x)
@@ -128,26 +155,33 @@ class FinalModel(BaseModel):
     def _get_inputs(cls, iterator):
         next_batch = next(iterator)  # here we assume data type torch.Tensor
         inputs, targets = next_batch["inputs"], next_batch["targets"]
+        categorical = get_input(next_batch["categorical"])
+        inputs = torch.cat((inputs, categorical), 1)
+
         inputs, targets = cls.to_var(inputs), cls.to_var(targets)
         return inputs, targets
 
 
 if __name__ == "__main__":
     from auto_encoder.final_dataset import FinalDataset, ToTensor
+    from auto_encoder.model import Autoencoder
     from torch.utils.data import DataLoader
+
     top = None
-    train_batch_size = 4096
+    augment = 5
+    train_batch_size = 8192
     test_batch_size = 2048
+    AUTOENCODER = Autoencoder.load("ready/autoenc_22.mdl")
 
-    train_dataset = FinalDataset("train.npy", is_train=True, transform=ToTensor(), top=top)
-    validation_dataset = FinalDataset("test.npy", is_train=False, top=top, transform=ToTensor())
+    train_ds = FinalDataset("../data/for_train.csv", is_train=True, transform=ToTensor(), top=top, augment=augment)
+    val_ds = FinalDataset("../data/for_test.csv", is_train=False, top=top, transform=ToTensor())
 
-    dataloader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True, num_workers=12)
-    val_dataloader = DataLoader(validation_dataset, batch_size=test_batch_size, shuffle=False, num_workers=1)
+    train_loader = DataLoader(train_ds, batch_size=train_batch_size, shuffle=True, num_workers=6)
+    val_loader = DataLoader(val_ds, batch_size=test_batch_size, shuffle=False, num_workers=6)
 
     main_logger = Logger("../logs")
 
-    net = FinalModel(35, 15, 1)
+    net = FinalModel([36, 20, 10], 1)
     net.show_env_info()
     if torch.cuda.is_available():
         net.cuda()
@@ -156,5 +190,5 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         loss_func.cuda()
     optim = torch.optim.Adam(net.parameters(), lr=0.0001)
-    net.fit(optim, loss_func, dataloader, val_dataloader, 150, logger=main_logger)
+    net.fit(optim, loss_func, train_loader, val_loader, 150, logger=main_logger)
 

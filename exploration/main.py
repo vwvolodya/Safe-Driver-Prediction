@@ -173,12 +173,29 @@ def prepare(path, is_train=True, top=None):
     result.to_csv("../data/processed.csv")
 
 
+def preprocess(path):
+    names = "id,target,ps_ind_01,ps_ind_02_cat,ps_ind_03,ps_ind_04_cat,ps_ind_05_cat,ps_ind_06_bin," \
+            "ps_ind_07_bin,ps_ind_08_bin,ps_ind_09_bin,ps_ind_10_bin,ps_ind_11_bin,ps_ind_12_bin," \
+            "ps_ind_13_bin,ps_ind_14,ps_ind_15,ps_ind_16_bin,ps_ind_17_bin,ps_ind_18_bin,ps_reg_01," \
+            "ps_reg_02,ps_reg_03,ps_car_01_cat,ps_car_02_cat,ps_car_03_cat,ps_car_04_cat,ps_car_05_cat," \
+            "ps_car_06_cat,ps_car_07_cat,ps_car_08_cat,ps_car_09_cat,ps_car_10_cat,ps_car_11_cat,ps_car_11," \
+            "ps_car_12,ps_car_13,ps_car_14,ps_car_15,ps_calc_01,ps_calc_02,ps_calc_03,ps_calc_04," \
+            "ps_calc_05,ps_calc_06,ps_calc_07,ps_calc_08,ps_calc_09,ps_calc_10,ps_calc_11,ps_calc_12," \
+            "ps_calc_13,ps_calc_14,ps_calc_15_bin,ps_calc_16_bin,ps_calc_17_bin,ps_calc_18_bin," \
+            "ps_calc_19_bin,ps_calc_20_bin".split(",")
+    categorical = [i for i in names if "cat" in i]
+    types = {i:"object" for i in categorical}
+    data = pd.read_csv(path, dtype=types)
+    new_ = pd.get_dummies(data)
+    new_.to_csv("../data/prediction/one-hot-test.csv", index=False)
+
+
 if __name__ == "__main__":
     # prepare("../data/tf_idf_all.csv", is_train=False)
-    data = pd.read_csv("../data/tf_idf_all.csv")
+    data = pd.read_csv("../data/one-hot-train.csv")
     train, other = train_test_split(data, test_size=0.1, random_state=101101)
-    train.to_csv("../data/for_train_tf.csv")
-    other.to_csv("../data/for_test_tf.csv")
+    train.to_csv("../data/for_train.csv", index=False)
+    other.to_csv("../data/for_test.csv", index=False)
     # func(data)
 # train, other = train_test_split(data, test_size=0.2, random_state=101101)
 # validation, test = train_test_split(other, test_size=0.5, random_state=10101)

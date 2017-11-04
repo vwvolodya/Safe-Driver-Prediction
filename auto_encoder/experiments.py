@@ -80,8 +80,8 @@ if __name__ == "__main__":
 
     top = None
 
-    train_ds = AutoEncoderDataset("../data/for_train_processed.csv", is_train=False, transform=ToTensor(), top=top)
-    test_dataset = AutoEncoderDataset("../data/for_test_processed.csv", is_train=False, transform=ToTensor(), top=top)
+    train_ds = AutoEncoderDataset("../data/for_train.csv", is_train=False, transform=ToTensor(), top=top)
+    test_dataset = AutoEncoderDataset("../data/for_test.csv", is_train=False, transform=ToTensor(), top=top)
 
     dataloader = DataLoader(train_ds, batch_size=1, shuffle=False, num_workers=12)
     val_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=1)
