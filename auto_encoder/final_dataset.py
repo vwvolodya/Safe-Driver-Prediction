@@ -8,9 +8,9 @@ class FinalDataset(Dataset):
     def __init__(self, path, is_train=True, transform=None, top=None):
         self.transform = transform
         data = np.load(path)
+        if top:
+            data = data[:top, :]
         self.data = data
-        self.top = top
-        self.is_train = is_train
         self.__print_stats(data)
 
     def __len__(self):

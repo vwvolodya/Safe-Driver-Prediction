@@ -115,7 +115,7 @@ class Autoencoder(BaseModel):
                 self._accumulate_results(targets, predictions, loss=loss.data[0])
 
             self.evaluate(logger, validation_data_loader, loss_fn=loss_fn, switch_to_eval=True)
-            self.save("./models/autoenc_%s.mdl" % e)
+            self.save("./models/adam_autoenc_%s.mdl" % e)
 
     @classmethod
     def _get_inputs(cls, iterator):
@@ -147,6 +147,6 @@ if __name__ == "__main__":
     loss_func = torch.nn.MSELoss()
     if torch.cuda.is_available():
         loss_func.cuda()
-    optim = torch.optim.SGD(net.parameters(), lr=0.00005)
+    optim = torch.optim.Adam(net.parameters(), lr=0.00005)
     net.fit(optim, loss_func, dataloader, val_dataloader, 100, logger=main_logger)
 
