@@ -7,15 +7,16 @@ from collections import defaultdict
 from base.model import BaseModel
 from base.logger import Logger
 
-AUTOENCODER = None
+AUTOENCODER_CAT = None
+AUTOENCODER_VAL = None
 
 
-def get_input(data):
-    cat_input = AUTOENCODER.to_var(data)
-    categorical_x = AUTOENCODER.predict_encoder(cat_input)
-    categorical_x = AUTOENCODER.to_np(categorical_x).squeeze()
+def get_input(autoenc, data):
+    cat_input = autoenc.to_var(data)
+    categorical_x = autoenc.encoder(cat_input)
+    categorical_x = autoenc.to_np(categorical_x).squeeze()
     # x = np.concatenate((numeric_x, categorical_x))
-    categorical_x = AUTOENCODER.to_tensor(categorical_x)
+    categorical_x = autoenc.to_tensor(categorical_x)
     return categorical_x
 
 
@@ -25,7 +26,6 @@ class FinalModel(BaseModel):
 
         self.activation = nn.Tanh()
         self.sigmoid = torch.nn.Sigmoid()
-        gain = nn.init.calculate_gain("tanh")
 
         self.layers = []
         for i in range(len(layer_sizes) - 1):  # last layer has different activation
@@ -36,11 +36,11 @@ class FinalModel(BaseModel):
             setattr(self, "fc_%s" % i, fc)
             bn.cuda()
             fc.cuda()
-            nn.init.xavier_normal(fc.weight, gain=gain)
+            nn.init.xavier_normal(fc.weight, gain=0.01)
             self.layers.append((bn, fc))
 
         self.last = nn.Linear(layer_sizes[-1], num_classes)
-        nn.init.xavier_normal(self.last.weight, gain=gain)
+        nn.init.xavier_normal(self.last.weight, gain=0.01)
 
     def forward(self, x):
         for i, el in enumerate(self.layers):
@@ -148,15 +148,16 @@ class FinalModel(BaseModel):
 
                 self._accumulate_results(target_y, classes, loss=loss.data[0], probs=probs)
 
-            self.evaluate(logger, validation_data_loader, loss_fn=loss_fn, return_classes=True)
-            self.save("./models/final_%s.mdl" % e + 1)
+            self.evaluate(logger, validation_data_loader, loss_fn=loss_fn, return_classes=True, switch_to_eval=True)
+            self.save("./models/final_%s.mdl" % str(e + 1))
 
     @classmethod
     def _get_inputs(cls, iterator):
         next_batch = next(iterator)  # here we assume data type torch.Tensor
-        inputs, targets = next_batch["inputs"], next_batch["targets"]
-        categorical = get_input(next_batch["categorical"])
-        inputs = torch.cat((inputs, categorical), 1)
+        targets = next_batch["targets"]
+        categorical = get_input(AUTOENCODER_CAT, next_batch["categorical"])
+        numeric = get_input(AUTOENCODER_VAL, next_batch["numeric"])
+        inputs = torch.cat((numeric, categorical), 1)
 
         inputs, targets = cls.to_var(inputs), cls.to_var(targets)
         return inputs, targets
@@ -168,20 +169,23 @@ if __name__ == "__main__":
     from torch.utils.data import DataLoader
 
     top = None
-    augment = 5
+    augment = 2
     train_batch_size = 8192
     test_batch_size = 2048
-    AUTOENCODER = Autoencoder.load("ready/autoenc_22.mdl")
+    AUTOENCODER_CAT = Autoencoder.load("ready/cat_autoenc_32.mdl")
+    AUTOENCODER_CAT.eval()
+    AUTOENCODER_VAL = Autoencoder.load("ready/numeric_autoenc_20.mdl")
+    AUTOENCODER_VAL.eval()
 
     train_ds = FinalDataset("../data/for_train.csv", is_train=True, transform=ToTensor(), top=top, augment=augment)
-    val_ds = FinalDataset("../data/for_test.csv", is_train=False, top=top, transform=ToTensor())
+    val_ds = FinalDataset("../data/for_test.csv", is_train=True, top=top, transform=ToTensor())
 
     train_loader = DataLoader(train_ds, batch_size=train_batch_size, shuffle=True, num_workers=6)
     val_loader = DataLoader(val_ds, batch_size=test_batch_size, shuffle=False, num_workers=6)
 
     main_logger = Logger("../logs")
 
-    net = FinalModel([36, 20, 10], 1)
+    net = FinalModel([20, 10], 1)
     net.show_env_info()
     if torch.cuda.is_available():
         net.cuda()

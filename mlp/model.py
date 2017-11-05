@@ -10,10 +10,10 @@ from collections import defaultdict
 
 
 class DriverClassifier(BaseModel):
-    def __init__(self, layer_sizes: list, num_classes: int, seed=1010101, gain=1):
+    def __init__(self, layer_sizes: list, num_classes: int, seed=10101, gain=0.01):
         super().__init__(seed=seed)
 
-        self.activation = nn.ELU(inplace=True)
+        self.activation = nn.Tanh()
         self.sigmoid = torch.nn.Sigmoid()
 
         self.layers = []
@@ -174,7 +174,7 @@ class DriverClassifier(BaseModel):
                 self._accumulate_results(target_y, pred_y, loss=loss.data[0], probs=probs)
 
             self.evaluate(logger, validation_data_loader, loss_fn=loss_fn, switch_to_eval=True)
-            self.save("models/model_%s.mdl" % e + 1)
+            self.save("models/model_%s.mdl" % str(e + 1))
 
 
 if __name__ == "__main__":
@@ -183,16 +183,16 @@ if __name__ == "__main__":
 
     top = None
 
-    transformed_dataset = TfDriverDataset("../data/for_train_tf.csv", is_train=True, transform=ToTensor(), top=top)
-    validation_dataset = TfDriverDataset("../data/for_test_tf.csv", is_train=False, transform=ToTensor(), top=top)
+    train_ds = TfDriverDataset("../data/for_train.csv", is_train=True, transform=ToTensor(), top=top)
+    val_ds = TfDriverDataset("../data/for_test.csv", is_train=True, transform=ToTensor(), top=top)
 
-    dataloader = DataLoader(transformed_dataset, batch_size=4096, shuffle=True, num_workers=6)
-    val_dataloader = DataLoader(validation_dataset, batch_size=2048, shuffle=False, num_workers=6)
+    train_loader = DataLoader(train_ds, batch_size=4096, shuffle=True, num_workers=6)
+    val_loader = DataLoader(val_ds, batch_size=2048, shuffle=False, num_workers=6)
 
     main_logger = Logger("../logs")
 
-    input_layer = transformed_dataset.num_features
-    net = DriverClassifier([input_layer, 40, 25, 10], 1)
+    input_layer = train_ds.num_features
+    net = DriverClassifier([input_layer, 50, 25, 10], 1)
     net.show_env_info()
     if torch.cuda.is_available():
         net.cuda()
@@ -200,6 +200,6 @@ if __name__ == "__main__":
     loss_func = torch.nn.BCELoss()
     if torch.cuda.is_available():
         loss_func.cuda()
-    optim = torch.optim.Adam(net.parameters(), lr=0.0005)
-    net.fit(optim, loss_func, dataloader, val_dataloader, 50, logger=main_logger)
+    optim = torch.optim.Adam(net.parameters(), lr=0.0001)
+    net.fit(optim, loss_func, train_loader, val_loader, 150, logger=main_logger)
     print()

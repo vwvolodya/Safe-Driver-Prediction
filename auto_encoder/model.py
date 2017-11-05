@@ -141,9 +141,9 @@ if __name__ == "__main__":
     test_batch_size = 4096
 
     train_ds = AutoEncoderDataset("../data/one-hot-train.csv", is_train=True, transform=ToTensor(), top=top,
-                                  noise_rate=0.2, use_categorical=False)
+                                  noise_rate=0.6, use_categorical=True)
     val_ds = AutoEncoderDataset("../data/train_pos.csv", is_train=False, top=val_top, transform=ToTensor(),
-                                remove_positive=False, use_categorical=False)
+                                remove_positive=False, use_categorical=True)
 
     train_loader = DataLoader(train_ds, batch_size=train_batch_size, shuffle=False, num_workers=6)
     val_loader = DataLoader(val_ds, batch_size=test_batch_size, shuffle=False, num_workers=6)
@@ -151,7 +151,7 @@ if __name__ == "__main__":
     main_logger = Logger("../logs")
 
     input_layer = train_ds.num_features
-    net = Autoencoder(input_layer, int(input_layer * 1.4), 10, model_prefix="numeric_", use_batch_norm=True)
+    net = Autoencoder(input_layer, int(input_layer * 1.4), 10, model_prefix="cat_", use_batch_norm=False)
     net.show_env_info()
     if torch.cuda.is_available():
         net.cuda()
