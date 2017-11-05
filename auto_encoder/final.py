@@ -149,7 +149,7 @@ class FinalModel(BaseModel):
                 self._accumulate_results(target_y, classes, loss=loss.data[0], probs=probs)
 
             self.evaluate(logger, validation_data_loader, loss_fn=loss_fn, return_classes=True)
-            self.save("./models/final_%s.mdl" % e)
+            self.save("./models/final_%s.mdl" % e + 1)
 
     @classmethod
     def _get_inputs(cls, iterator):

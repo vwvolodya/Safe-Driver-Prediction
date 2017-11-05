@@ -174,7 +174,7 @@ class DriverClassifier(BaseModel):
                 self._accumulate_results(target_y, pred_y, loss=loss.data[0], probs=probs)
 
             self.evaluate(logger, validation_data_loader, loss_fn=loss_fn, switch_to_eval=True)
-            self.save("models/model_%s.mdl" % e)
+            self.save("models/model_%s.mdl" % e + 1)
 
 
 if __name__ == "__main__":

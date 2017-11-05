@@ -117,7 +117,7 @@ class Autoencoder(BaseModel):
                 self._accumulate_results(targets, predictions, loss=loss.data[0])
 
             self.evaluate(logger, validation_data_loader, loss_fn=loss_fn, switch_to_eval=True)
-            self.save("./models/%sautoenc_%s.mdl" % (self._model_prefix, e))
+            self.save("./models/%sautoenc_%s.mdl" % (self._model_prefix, e + 1))
 
     @classmethod
     def _get_inputs(cls, iterator):

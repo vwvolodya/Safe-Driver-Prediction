@@ -23,6 +23,7 @@ class FinalDataset(Dataset):
             slice_ = df[true_rows]
             df = df.append([slice_] * augment, ignore_index=True)
             df = df.sample(frac=1)
+        self.ids = df["id"].as_matrix()
         if not inference_only:
             self.y = df[self.target_column].as_matrix()
         data = df[numeric_cols].as_matrix()
@@ -44,6 +45,8 @@ class FinalDataset(Dataset):
         else:
             y = 0
         item = {"inputs": numeric_x, "targets": np.array([y]), "categorical": cat_vector}
+        if self.inference_only:
+            item["id"] = np.array([self.ids[idx]])
 
         if self.transform:
             item = self.transform(item)
