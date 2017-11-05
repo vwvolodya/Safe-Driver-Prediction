@@ -9,14 +9,13 @@ from collections import defaultdict
 
 
 class Autoencoder(BaseModel):
-    def __init__(self, input_size, hidden_size, encoder_features, model_prefix="", use_batch_norm=False):
+    def __init__(self, input_size, hidden_size, encoder_features, num_classes=1, model_prefix="", classifier=False):
         super().__init__()
         self._model_prefix = model_prefix
-        # gain = nn.init.calculate_gain("tanh")
-        self._use_batch_norm = use_batch_norm
-        if use_batch_norm:
-            print("Will use BatchNorm for encoder.")
-            self.bn = nn.BatchNorm1d(input_size)
+        self.is_classifier = classifier
+        self.sigmoid = nn.Sigmoid()
+        self.out = nn.Linear(encoder_features, num_classes)
+        nn.init.xavier_normal(self.out.weight, gain=0.01)
 
         self.fc1 = nn.Linear(input_size, hidden_size, bias=True)
         nn.init.xavier_uniform(self.fc1.weight, gain=0.01)
@@ -32,6 +31,12 @@ class Autoencoder(BaseModel):
 
         self.activation = nn.Tanh()
         self._encoder_shape = True
+
+    def classifier(self, x):
+        # x here is the result of encoder's output
+        probs = self.out(x)
+        probs = self.sigmoid(probs)
+        return probs
 
     def encoder(self, x):
         if self._encoder_shape is False:
@@ -59,11 +64,10 @@ class Autoencoder(BaseModel):
 
     def forward(self, x):
         y = self.encoder(x)
-        y = self.decoder(y)
-        return y
-
-    def predict_encoder(self, x):
-        y = self.encoder(x)
+        if self.is_classifier is True:
+            y = self.classifier(y)
+        else:
+            y = self.decoder(y)
         return y
 
     def predict(self, x, **kwargs):
@@ -140,10 +144,10 @@ if __name__ == "__main__":
     train_batch_size = 8192
     test_batch_size = 4096
 
-    train_ds = AutoEncoderDataset("../data/one-hot-train.csv", is_train=True, transform=ToTensor(), top=top,
-                                  noise_rate=0.6, use_categorical=True)
-    val_ds = AutoEncoderDataset("../data/train_pos.csv", is_train=False, top=val_top, transform=ToTensor(),
-                                remove_positive=False, use_categorical=True)
+    train_ds = AutoEncoderDataset("../data/for_train.csv", is_train=True, transform=ToTensor(), top=top,
+                                  noise_rate=0.5, remove_positive=True)
+    val_ds = AutoEncoderDataset("../data/for_test.csv", is_train=False, top=val_top, transform=ToTensor(),
+                                remove_positive=False, noise_rate=None)
 
     train_loader = DataLoader(train_ds, batch_size=train_batch_size, shuffle=False, num_workers=6)
     val_loader = DataLoader(val_ds, batch_size=test_batch_size, shuffle=False, num_workers=6)
@@ -151,7 +155,7 @@ if __name__ == "__main__":
     main_logger = Logger("../logs")
 
     input_layer = train_ds.num_features
-    net = Autoencoder(input_layer, int(input_layer * 1.4), 10, model_prefix="cat_", use_batch_norm=False)
+    net = Autoencoder(input_layer, int(input_layer * 1.4), 10, model_prefix="cat_")
     net.show_env_info()
     if torch.cuda.is_available():
         net.cuda()
