@@ -96,7 +96,7 @@ class BaseDataset(Dataset):
             return
         positive = data[self.target_column]
         all_pos = sum(positive)
-        all_items = len(self)
+        all_items = data.shape[0]
         percentage = 1.0 * all_pos / all_items
         print("There are %s positive examples" % percentage)
         print("Total number of examples is %s" % all_items)

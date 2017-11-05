@@ -11,7 +11,7 @@ from collections import defaultdict
 class Autoencoder(BaseModel):
     def __init__(self, input_size, hidden_size, encoder_features, num_classes=1, model_prefix="", classifier=False):
         super().__init__()
-        self._model_prefix = model_prefix
+        self.model_prefix = model_prefix
         self.is_classifier = classifier
         self.sigmoid = nn.Sigmoid()
         self.out = nn.Linear(encoder_features, num_classes)
@@ -42,8 +42,6 @@ class Autoencoder(BaseModel):
         if self._encoder_shape is False:
             self.fc1.weight.data.t_()
             self.fc2.weight.data.t_()
-        if self._use_batch_norm:
-            x = self.bn(x)
         out = self.fc1(x)
         out = self.activation(out)
         out = self.fc2(out)
@@ -70,12 +68,85 @@ class Autoencoder(BaseModel):
             y = self.decoder(y)
         return y
 
-    def predict(self, x, **kwargs):
+    @classmethod
+    def _get_classes(cls, predictions):
+        classes = (predictions.data > 0.5).float()
+        pred_y = classes.cpu().numpy().squeeze()
+        return pred_y
+
+    def predict(self, x, return_classes=False, **kwargs):
         predictions = self.__call__(x)
-        return predictions
+        classes = None
+        if self.is_classifier and return_classes:
+            classes = self._get_classes(predictions)
+        return predictions, classes
+
+    def _compute_metrics_clf(self, target_y, pred_y, predictions_are_classes=True, training=True):
+        prefix = "val_" if not training else ""
+        if predictions_are_classes:
+            recall = metrics.recall_score(target_y, pred_y, pos_label=1.0)
+            precision = metrics.precision_score(target_y, pred_y, pos_label=1.0)
+            result = {"precision": precision, "recall": recall}
+        else:
+            fpr, tpr, thresholds = metrics.roc_curve(target_y, pred_y, pos_label=1.0)
+            auc = metrics.auc(fpr, tpr)
+            custom_gini = 2 * auc - 1
+            result = {"auc": auc, "custom_gini": custom_gini}
+
+        final = {}
+        for k, v in result.items():
+            final[prefix + k] = v
+        return final
 
     def _compute_metrics(self, target_y, pred_y, predictions_are_classes=True, training=True):
         return {}
+
+    def evaluate_clf(self, logger, loader, loss_fn=None, switch_to_eval=False, **kwargs):
+        # aggregate results from training epoch.
+        train_losses = self._predictions.pop("train_loss")
+        train_loss = sum(train_losses) / len(train_losses)
+        train_metrics_1 = self._compute_metrics_clf(self._predictions["target"], self._predictions["predicted"])
+        train_metrics_2 = self._compute_metrics_clf(self._predictions["target"], self._predictions["probs"],
+                                                predictions_are_classes=False)
+        train_metrics = {"train_loss": train_loss}
+        train_metrics.update(train_metrics_1)
+        train_metrics.update(train_metrics_2)
+
+        if switch_to_eval:
+            self.eval()
+        iterator = iter(loader)
+        iter_per_epoch = len(loader)
+        all_predictions = np.array([])
+        all_targets = np.array([])
+        all_probs = np.array([])
+        losses = []
+        for i in range(iter_per_epoch):
+            inputs, targets = self._get_inputs(iterator)
+            probs, classes = self.predict(inputs, return_classes=True)
+            target_y = self.to_np(targets).squeeze()
+            if loss_fn:
+                loss = loss_fn(probs, targets)
+                losses.append(loss.data[0])
+            probs = self.to_np(probs).squeeze()
+            all_targets = np.append(all_targets, target_y)
+            all_probs = np.append(all_probs, probs)
+            all_predictions = np.append(all_predictions, classes)
+        computed_metrics = self._compute_metrics_clf(all_targets, all_predictions, training=False)
+        computed_metrics_1 = self._compute_metrics_clf(all_targets, all_probs, training=False,
+                                                       predictions_are_classes=False)
+
+        val_loss = sum(losses) / len(losses)
+        computed_metrics.update({"val_loss": val_loss})
+        computed_metrics.update(computed_metrics_1)
+        if switch_to_eval:
+            # switch back to train
+            self.train()
+
+        self._log_and_reset(logger, data=train_metrics, log_grads=True)
+        self._log_and_reset(logger, data=computed_metrics, log_grads=False)
+
+        self._predictions = defaultdict(list)
+        return computed_metrics
 
     def evaluate(self, logger, loader, loss_fn, switch_to_eval=False, **kwargs):
         # aggregate results from training epoch.
@@ -91,7 +162,7 @@ class Autoencoder(BaseModel):
         losses = []
         for i in range(iter_per_epoch):
             inputs, targets = self._get_inputs(iterator)
-            probs = self.predict(inputs)
+            probs, _ = self.predict(inputs)
 
             loss = loss_fn(probs, targets)
             losses.append(loss.data[0])
@@ -116,17 +187,24 @@ class Autoencoder(BaseModel):
             for i in range(iter_per_epoch):
                 inputs, targets = self._get_inputs(data_iter)
 
-                predictions = self.predict(inputs)
+                predictions, classes = self.predict(inputs, return_classes=True)
 
                 optim.zero_grad()
                 loss = loss_fn(predictions, targets)
                 loss.backward()
                 optim.step()
 
-                self._accumulate_results(targets, predictions, loss=loss.data[0])
+                self._accumulate_results(self.to_np(targets).squeeze(),
+                                         classes,
+                                         loss=loss.data[0],
+                                         probs=self.to_np(predictions).squeeze())
 
-            self.evaluate(logger, validation_data_loader, loss_fn, switch_to_eval=True)
-            self.save("./models/%sautoenc_%s.mdl" % (self._model_prefix, e + 1))
+            if self.is_classifier:
+                self.evaluate_clf(logger, validation_data_loader, loss_fn, switch_to_eval=True)
+                self.save("./models/clf_%s" % str(e + 1))
+            else:
+                self.evaluate(logger, validation_data_loader, loss_fn, switch_to_eval=True)
+                self.save("./models/%sautoenc_%s.mdl" % (self.model_prefix, str(e + 1)))
 
     @classmethod
     def _get_inputs(cls, iterator):
@@ -139,29 +217,40 @@ class Autoencoder(BaseModel):
 if __name__ == "__main__":
     from auto_encoder.dataset import AutoEncoderDataset, ToTensor
     from torch.utils.data import DataLoader
-    top = None
-    val_top = None
-    train_batch_size = 8192
-    test_batch_size = 4096
-
-    train_ds = AutoEncoderDataset("../data/for_train.csv", is_train=True, transform=ToTensor(), top=top,
-                                  noise_rate=0.5, remove_positive=True)
-    val_ds = AutoEncoderDataset("../data/for_test.csv", is_train=False, top=val_top, transform=ToTensor(),
-                                remove_positive=False, noise_rate=None)
-
-    train_loader = DataLoader(train_ds, batch_size=train_batch_size, shuffle=False, num_workers=6)
-    val_loader = DataLoader(val_ds, batch_size=test_batch_size, shuffle=False, num_workers=6)
+    top = 100
+    val_top = 100
+    train_batch_size = 10
+    test_batch_size = 10
+    is_classifier = True
 
     main_logger = Logger("../logs")
 
-    input_layer = train_ds.num_features
-    net = Autoencoder(input_layer, int(input_layer * 1.4), 10, model_prefix="cat_")
+    if is_classifier:
+        train_ds = AutoEncoderDataset("../data/for_train.csv", is_train=True, transform=ToTensor(), top=top,
+                                      for_classifier=True, augment=2)
+        val_ds = AutoEncoderDataset("../data/for_test.csv", is_train=True, top=val_top, transform=ToTensor(),
+                                    for_classifier=True)
+        net = Autoencoder.load("./models/autoenc_1.mdl")
+        net.is_classifier = True
+        loss_func = torch.nn.BCELoss()
+    else:
+        train_ds = AutoEncoderDataset("../data/for_train.csv", is_train=True, transform=ToTensor(), top=top,
+                                      noise_rate=0.5, remove_positive=True)
+        val_ds = AutoEncoderDataset("../data/for_test.csv", is_train=False, top=val_top, transform=ToTensor(),
+                                    remove_positive=False, noise_rate=None)
+
+        input_layer = train_ds.num_features
+        net = Autoencoder(input_layer, int(input_layer * 1.3), 25)
+
+        loss_func = torch.nn.MSELoss()
+
     net.show_env_info()
+    train_loader = DataLoader(train_ds, batch_size=train_batch_size, shuffle=False, num_workers=6)
+    val_loader = DataLoader(val_ds, batch_size=test_batch_size, shuffle=False, num_workers=6)
+
     if torch.cuda.is_available():
         net.cuda()
-
-    loss_func = torch.nn.SmoothL1Loss()
-    if torch.cuda.is_available():
         loss_func.cuda()
+
     optim = torch.optim.Adam(net.parameters(), lr=0.0001)
     net.fit(optim, loss_func, train_loader, val_loader, 100, logger=main_logger)

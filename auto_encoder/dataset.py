@@ -6,9 +6,10 @@ from base.dataset import ToTensor, BaseDataset
 
 class AutoEncoderDataset(BaseDataset):
     def __init__(self, path, noise_rate=None, is_train=True, transform=None, inference_only=False,
-                 top=None, remove_positive=False, augment=None):
+                 top=None, remove_positive=False, augment=None, for_classifier=False):
         self.transform = transform
         self.inference_only = inference_only
+        self.for_classifier = for_classifier
         self.noise_rate = noise_rate
         self.target_column = "target"
         self.is_train = is_train
@@ -36,17 +37,22 @@ class AutoEncoderDataset(BaseDataset):
         return self.shape[0]
 
     def __getitem__(self, idx):
-        x = self.x[idx, :]
-        if self.noise_rate:
-            # higher noise rate actually results in less nodes set to 0.
-            mask = np.random.binomial(1, 1 - self.noise_rate, x.shape[0])
-            x = x * mask
+        original_x = self.x[idx, :]
 
-        if not self.inference_only:
-            y = np.array([self.y[idx]])
-        else:
-            y = np.array([0])
-        item = {"inputs": x, "targets": x, "y": y}
+        if self.for_classifier:
+            if self.inference_only:
+                y = np.array([0])
+            else:
+                y = np.array([self.y[idx]])
+            item = {"inputs": original_x, "targets": y}
+        else:       # autoencoder goes here
+            if self.noise_rate:
+                # higher noise rate actually results in less nodes set to 0.
+                mask = np.random.binomial(1, 1 - self.noise_rate, original_x.shape[0])
+                x = original_x * mask
+            else:
+                x = original_x
+            item = {"inputs": x, "targets": original_x}
 
         if self.transform:
             item = self.transform(item)
@@ -54,10 +60,11 @@ class AutoEncoderDataset(BaseDataset):
 
 
 if __name__ == "__main__":
-    transformed_dataset = AutoEncoderDataset("../data/for_train.csv", transform=ToTensor(), augment=2)
+    transformed_dataset = AutoEncoderDataset("../data/for_train.csv", transform=ToTensor(), augment=2,
+                                             for_classifier=False, noise_rate=0.5)
     for i in range(len(transformed_dataset)):
         sample = transformed_dataset[i]
-        print(i, sample['inputs'].size(), sample['targets'].size(), sample["y"].size())
+        print(i, sample['inputs'].size(), sample['targets'].size())
         if i == 3:
             break
 

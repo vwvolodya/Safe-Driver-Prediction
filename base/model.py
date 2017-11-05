@@ -84,7 +84,8 @@ class BaseModel(nn.Module):
         for tag, value in self.named_parameters():
             tag = tag.replace('.', '/')
             logger.histo_summary(tag, self.to_np(value), self._epoch + 1)
-            logger.histo_summary(tag + '/grad', self.to_np(value.grad), self._epoch + 1)
+            if value.grad is not None:
+                logger.histo_summary(tag + '/grad', self.to_np(value.grad), self._epoch + 1)
 
     def _log_and_reset(self, logger, data, log_grads=True):
         self._log_data(logger, data)
