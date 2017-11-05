@@ -15,6 +15,7 @@ class BaseDataset(Dataset):
 
     @classmethod
     def augment_dataframe(cls, data, multiplier, target_column="target"):
+        print("Original shape was", data.shape)
         true_rows = data[target_column] == 1
         slice_ = data[true_rows]
         data = data.append([slice_] * multiplier, ignore_index=True)
@@ -67,6 +68,7 @@ class BaseDataset(Dataset):
 
     @classmethod
     def get_categorical_df(cls, data):
+        print("will get categorical data")
         existing_columns = list(data.columns)
         needed_columns = [i for i in existing_columns if "_cat" in i or "_bin" in i]
         needed_data = data[needed_columns]
@@ -75,7 +77,7 @@ class BaseDataset(Dataset):
     @classmethod
     def get_numeric_df(cls, data, excluded):
         existing_columns = list(data.columns)
-        print("will use only numeric data")
+        print("will get numeric data")
         needed_columns = [i for i in existing_columns if "_cat" not in i and "_bin" not in i and i not in excluded]
         needed_data = data[needed_columns]
         return needed_data

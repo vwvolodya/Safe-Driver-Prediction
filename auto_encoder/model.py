@@ -15,7 +15,7 @@ class Autoencoder(BaseModel):
         self.is_classifier = classifier
         self.sigmoid = nn.Sigmoid()
         self.out = nn.Linear(encoder_features, num_classes)
-        nn.init.xavier_normal(self.out.weight, gain=0.01)
+        nn.init.xavier_uniform(self.out.weight, gain=0.01)
 
         self.fc1 = nn.Linear(input_size, hidden_size, bias=True)
         nn.init.xavier_uniform(self.fc1.weight, gain=0.01)
@@ -201,7 +201,7 @@ class Autoencoder(BaseModel):
 
             if self.is_classifier:
                 self.evaluate_clf(logger, validation_data_loader, loss_fn, switch_to_eval=True)
-                self.save("./models/clf_%s" % str(e + 1))
+                self.save("./models/clf_%s.mdl" % str(e + 1))
             else:
                 self.evaluate(logger, validation_data_loader, loss_fn, switch_to_eval=True)
                 self.save("./models/%sautoenc_%s.mdl" % (self.model_prefix, str(e + 1)))
@@ -217,20 +217,20 @@ class Autoencoder(BaseModel):
 if __name__ == "__main__":
     from auto_encoder.dataset import AutoEncoderDataset, ToTensor
     from torch.utils.data import DataLoader
-    top = 100
-    val_top = 100
-    train_batch_size = 10
-    test_batch_size = 10
+    top = None
+    val_top = None
+    train_batch_size = 8192
+    test_batch_size = 4096
     is_classifier = True
 
     main_logger = Logger("../logs")
 
     if is_classifier:
         train_ds = AutoEncoderDataset("../data/for_train.csv", is_train=True, transform=ToTensor(), top=top,
-                                      for_classifier=True, augment=2)
+                                      for_classifier=True, augment=10)
         val_ds = AutoEncoderDataset("../data/for_test.csv", is_train=True, top=val_top, transform=ToTensor(),
                                     for_classifier=True)
-        net = Autoencoder.load("./models/autoenc_1.mdl")
+        net = Autoencoder.load("./models/autoenc_70.mdl")
         net.is_classifier = True
         loss_func = torch.nn.BCELoss()
     else:

@@ -17,7 +17,7 @@ class AutoEncoderDataset(BaseDataset):
         excluded = {"id", "target"}
 
         data = pd.read_csv(path)
-
+        self.ids = data["id"].as_matrix()
         if augment:
             data = self.augment_dataframe(data, augment, target_column=self.target_column)
 
@@ -40,11 +40,13 @@ class AutoEncoderDataset(BaseDataset):
         original_x = self.x[idx, :]
 
         if self.for_classifier:
+            item = {"inputs": original_x}
             if self.inference_only:
                 y = np.array([0])
+                item["id"] = np.array([self.ids[idx]])
             else:
                 y = np.array([self.y[idx]])
-            item = {"inputs": original_x, "targets": y}
+            item["targets"] = y
         else:       # autoencoder goes here
             if self.noise_rate:
                 # higher noise rate actually results in less nodes set to 0.

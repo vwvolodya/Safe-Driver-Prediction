@@ -55,12 +55,14 @@ class BaseModel(nn.Module):
         return tensor
 
     def _accumulate_results(self, target_y, pred_y, loss=None, **kwargs):
-        self._predictions["target"].extend(target_y)
-        self._predictions["predicted"].extend(pred_y)
         if loss is not None:
             self._predictions["train_loss"].append(loss)
         for k, v in kwargs.items():
             self._predictions[k].extend(v)
+        if target_y is not None:
+            self._predictions["target"].extend(target_y)
+        if pred_y is not None:
+            self._predictions["predicted"].extend(pred_y)
 
     def show_env_info(self):
         print('__Python VERSION:', sys.version)
