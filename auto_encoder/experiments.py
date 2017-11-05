@@ -5,6 +5,7 @@ from auto_encoder.model import Autoencoder
 from auto_encoder.dataset import AutoEncoderDataset
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 
 def plot_data(x, y, title):
@@ -70,27 +71,35 @@ def get_encoder_repr(data_loader, model):
     return result
 
 
+def gather_positive(path):
+    data = pd.read_csv(path)
+    true_rows = data["target"] == 1
+    data = data[true_rows]
+    data.to_csv("../data/train_pos.csv", index=False)
+
+
 if __name__ == "__main__":
-    from auto_encoder.dataset import ToTensor
-    from torch.utils.data import DataLoader
-    import seaborn as sns
-    import matplotlib.pyplot as plt
-
-    # sns.set(style="white")
-
-    top = None
-
-    train_ds = AutoEncoderDataset("../data/for_train.csv", is_train=False, transform=ToTensor(), top=top)
-    test_dataset = AutoEncoderDataset("../data/for_test.csv", is_train=False, transform=ToTensor(), top=top)
-
-    dataloader = DataLoader(train_ds, batch_size=1, shuffle=False, num_workers=12)
-    val_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=1)
-
-    autoenc = Autoencoder.load("ready/adam_autoenc_20.mdl")
-    autoenc.eval()
-
-    train_features = get_encoder_repr(dataloader, autoenc)
-    test_features = get_encoder_repr(val_dataloader, autoenc)
-    np.save("train", train_features)
-    np.save("test", test_features)
+    gather_positive("../data/one-hot-train.csv")
+    # from auto_encoder.dataset import ToTensor
+    # from torch.utils.data import DataLoader
+    # import seaborn as sns
+    # import matplotlib.pyplot as plt
+    #
+    # # sns.set(style="white")
+    #
+    # top = None
+    #
+    # train_ds = AutoEncoderDataset("../data/for_train.csv", is_train=False, transform=ToTensor(), top=top)
+    # test_dataset = AutoEncoderDataset("../data/for_test.csv", is_train=False, transform=ToTensor(), top=top)
+    #
+    # dataloader = DataLoader(train_ds, batch_size=1, shuffle=False, num_workers=12)
+    # val_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=1)
+    #
+    # autoenc = Autoencoder.load("ready/adam_autoenc_20.mdl")
+    # autoenc.eval()
+    #
+    # train_features = get_encoder_repr(dataloader, autoenc)
+    # test_features = get_encoder_repr(val_dataloader, autoenc)
+    # np.save("train", train_features)
+    # np.save("test", test_features)
 

@@ -9,30 +9,36 @@ from collections import defaultdict
 
 
 class Autoencoder(BaseModel):
-    def __init__(self, input_size, hidden_size, encoder_features, model_prefix=""):
+    def __init__(self, input_size, hidden_size, encoder_features, model_prefix="", use_batch_norm=False):
         super().__init__()
         self._model_prefix = model_prefix
-        gain = nn.init.calculate_gain("relu")
+        # gain = nn.init.calculate_gain("tanh")
+        self._use_batch_norm = use_batch_norm
+        if use_batch_norm:
+            print("Will use BatchNorm for encoder.")
+            self.bn = nn.BatchNorm1d(input_size)
 
         self.fc1 = nn.Linear(input_size, hidden_size, bias=True)
-        nn.init.xavier_uniform(self.fc1.weight, gain=gain)
+        nn.init.xavier_uniform(self.fc1.weight, gain=0.01)
 
         self.fc2 = nn.Linear(hidden_size, encoder_features, bias=True)
-        nn.init.xavier_uniform(self.fc2.weight, gain=gain)
+        nn.init.xavier_uniform(self.fc2.weight, gain=0.01)
 
-        self.fc_02 = nn.Linear(encoder_features, hidden_size, bias=True)
+        self.fc_02 = nn.Linear(encoder_features, hidden_size, bias=False)
         self.fc_02.weight = self.fc2.weight
 
-        self.fc_01 = nn.Linear(hidden_size, input_size, bias=True)
+        self.fc_01 = nn.Linear(hidden_size, input_size, bias=False)
         self.fc_01.weight = self.fc1.weight
 
-        self.activation = nn.ReLU(inplace=True)
+        self.activation = nn.Tanh()
         self._encoder_shape = True
 
     def encoder(self, x):
         if self._encoder_shape is False:
             self.fc1.weight.data.t_()
             self.fc2.weight.data.t_()
+        if self._use_batch_norm:
+            x = self.bn(x)
         out = self.fc1(x)
         out = self.activation(out)
         out = self.fc2(out)
@@ -67,7 +73,7 @@ class Autoencoder(BaseModel):
     def _compute_metrics(self, target_y, pred_y, predictions_are_classes=True, training=True):
         return {}
 
-    def evaluate(self, logger, loader, loss_fn=None, switch_to_eval=False, **kwargs):
+    def evaluate(self, logger, loader, loss_fn, switch_to_eval=False, **kwargs):
         # aggregate results from training epoch.
         train_losses = self._predictions.pop("train_loss")
         train_loss = sum(train_losses) / len(train_losses)
@@ -83,9 +89,8 @@ class Autoencoder(BaseModel):
             inputs, targets = self._get_inputs(iterator)
             probs = self.predict(inputs)
 
-            if loss_fn:
-                loss = loss_fn(probs, targets)
-                losses.append(loss.data[0])
+            loss = loss_fn(probs, targets)
+            losses.append(loss.data[0])
 
         val_loss = sum(losses) / len(losses)
         computed_metrics = {"val_loss": val_loss}
@@ -116,7 +121,7 @@ class Autoencoder(BaseModel):
 
                 self._accumulate_results(targets, predictions, loss=loss.data[0])
 
-            self.evaluate(logger, validation_data_loader, loss_fn=loss_fn, switch_to_eval=True)
+            self.evaluate(logger, validation_data_loader, loss_fn, switch_to_eval=True)
             self.save("./models/%sautoenc_%s.mdl" % (self._model_prefix, e + 1))
 
     @classmethod
@@ -131,12 +136,14 @@ if __name__ == "__main__":
     from auto_encoder.dataset import AutoEncoderDataset, ToTensor
     from torch.utils.data import DataLoader
     top = None
-    val_top = 100000
+    val_top = None
     train_batch_size = 8192
-    test_batch_size = 8192
+    test_batch_size = 4096
 
-    train_ds = AutoEncoderDataset("../data/one-hot-train.csv", is_train=True, transform=ToTensor(), top=top)
-    val_ds = AutoEncoderDataset("../data/prediction/one-hot-test.csv", is_train=False, top=val_top, transform=ToTensor())
+    train_ds = AutoEncoderDataset("../data/one-hot-train.csv", is_train=True, transform=ToTensor(), top=top,
+                                  noise_rate=0.2, use_categorical=False)
+    val_ds = AutoEncoderDataset("../data/train_pos.csv", is_train=False, top=val_top, transform=ToTensor(),
+                                remove_positive=False, use_categorical=False)
 
     train_loader = DataLoader(train_ds, batch_size=train_batch_size, shuffle=False, num_workers=6)
     val_loader = DataLoader(val_ds, batch_size=test_batch_size, shuffle=False, num_workers=6)
@@ -144,12 +151,12 @@ if __name__ == "__main__":
     main_logger = Logger("../logs")
 
     input_layer = train_ds.num_features
-    net = Autoencoder(input_layer, int(input_layer * 1.4), 10)
+    net = Autoencoder(input_layer, int(input_layer * 1.4), 10, model_prefix="numeric_", use_batch_norm=True)
     net.show_env_info()
     if torch.cuda.is_available():
         net.cuda()
 
-    loss_func = torch.nn.MSELoss()
+    loss_func = torch.nn.SmoothL1Loss()
     if torch.cuda.is_available():
         loss_func.cuda()
     optim = torch.optim.Adam(net.parameters(), lr=0.0001)
