@@ -183,7 +183,7 @@ if __name__ == "__main__":
 
     top = None
 
-    train_ds = TfDriverDataset("../data/for_train.csv", is_train=True, transform=ToTensor(), top=top)
+    train_ds = TfDriverDataset("../data/for_train.csv", is_train=True, transform=ToTensor(), top=top, augment=10)
     val_ds = TfDriverDataset("../data/for_test.csv", is_train=True, transform=ToTensor(), top=top)
 
     train_loader = DataLoader(train_ds, batch_size=4096, shuffle=True, num_workers=6)

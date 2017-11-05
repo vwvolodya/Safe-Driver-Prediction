@@ -4,19 +4,19 @@ import pandas as pd
 from base.dataset import ToTensor
 import os, pickle
 from sklearn.externals import joblib
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, RobustScaler, MinMaxScaler
 
 
 class TfDriverDataset(Dataset):
-    def __init__(self, path, is_train=True, transform=None, inference_only=False, top=None):
+    def __init__(self, path, is_train=True, transform=None, inference_only=False, top=None, augment=None):
         self._inference_only = inference_only
         self.transform = transform
         self.target_column = "target"
         data = pd.read_csv(path)
         print("Original", data.shape)
         self.ids = data["id"].as_matrix()
-        if is_train:
-            magic_multiplier = 2  # 26 is because we have 3.5 % of true labels and we want wo make dataset balanced
+        if augment:
+            magic_multiplier = augment  # 26 is because we have 3.5 % of true labels and we want wo make dataset balanced
             # augment data to change balance.
             true_rows = data[self.target_column] == 1
             slice_ = data[true_rows]
@@ -46,12 +46,12 @@ class TfDriverDataset(Dataset):
 
         val_data = val_data.fillna(mean_vector)
 
-        scaler_filename = "scaler.plk"
+        scaler_filename = "max_scaler.plk"
         if os.path.exists(scaler_filename):
             scaler = joblib.load(scaler_filename)
             val_data = scaler.transform(val_data)
         else:
-            scaler = StandardScaler()
+            scaler = MinMaxScaler()
             val_data = scaler.fit_transform(val_data)
             joblib.dump(scaler, scaler_filename)
 

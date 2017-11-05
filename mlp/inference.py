@@ -9,7 +9,7 @@ test_file = "../data/prediction/one-hot-test.csv"
 
 test_dataset = TfDriverDataset(test_file, transform=ToTensor(), is_train=False, inference_only=True, top=None)
 
-net = DriverClassifier.load("./models/model_11.mdl")
+net = DriverClassifier.load("./ready/model_19.mdl")
 net.eval()
 
 dataloader = DataLoader(test_dataset, batch_size=256, shuffle=False, num_workers=1)
