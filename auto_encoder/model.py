@@ -217,27 +217,27 @@ class Autoencoder(BaseModel):
 if __name__ == "__main__":
     from auto_encoder.dataset import AutoEncoderDataset, ToTensor
     from torch.utils.data import DataLoader
-    top = None
-    val_top = None
-    train_batch_size = 8192
-    test_batch_size = 4096
+    top = 100
+    val_top = 100
+    train_batch_size = 10
+    test_batch_size = 10
     is_classifier = True
 
     main_logger = Logger("../logs")
 
     if is_classifier:
         train_ds = AutoEncoderDataset("../data/for_train.csv", is_train=True, transform=ToTensor(), top=top,
-                                      for_classifier=True, augment=10)
+                                      for_classifier=True, augment=10, duplicate_numeric_features=True)
         val_ds = AutoEncoderDataset("../data/for_test.csv", is_train=True, top=val_top, transform=ToTensor(),
-                                    for_classifier=True)
-        net = Autoencoder.load("./models/autoenc_70.mdl")
+                                    for_classifier=True, duplicate_numeric_features=True)
+        net = Autoencoder.load("./models/autoenc_64.mdl")
         net.is_classifier = True
         loss_func = torch.nn.BCELoss()
     else:
-        train_ds = AutoEncoderDataset("../data/for_train.csv", is_train=True, transform=ToTensor(), top=top,
-                                      noise_rate=0.5, remove_positive=True)
-        val_ds = AutoEncoderDataset("../data/for_test.csv", is_train=False, top=val_top, transform=ToTensor(),
-                                    remove_positive=False, noise_rate=None)
+        train_ds = AutoEncoderDataset("../data/one-hot-train.csv", is_train=True, transform=ToTensor(), top=top,
+                                      noise_rate=0.5, remove_positive=True, duplicate_numeric_features=True)
+        val_ds = AutoEncoderDataset("../data/train_pos.csv", is_train=False, top=val_top, transform=ToTensor(),
+                                    remove_positive=False, noise_rate=None, duplicate_numeric_features=True)
 
         input_layer = train_ds.num_features
         net = Autoencoder(input_layer, int(input_layer * 1.3), 25)
@@ -253,4 +253,4 @@ if __name__ == "__main__":
         loss_func.cuda()
 
     optim = torch.optim.Adam(net.parameters(), lr=0.0001)
-    net.fit(optim, loss_func, train_loader, val_loader, 100, logger=main_logger)
+    net.fit(optim, loss_func, train_loader, val_loader, 250, logger=main_logger)

@@ -39,8 +39,13 @@ class BaseModel(nn.Module):
 
     @classmethod
     def to_np(cls, x):
+        if x is None:
+            return np.array([])
         # convert Variable to numpy array
-        return x.data.cpu().numpy()
+        if isinstance(x, Variable):
+            return x.data.cpu().numpy()
+        else:
+            return x.numpy()
 
     @classmethod
     def to_var(cls, x, use_gpu=True):

@@ -67,10 +67,10 @@ class BaseDataset(Dataset):
         return val_data
 
     @classmethod
-    def get_categorical_df(cls, data):
+    def get_categorical_df(cls, data, excluded=tuple()):
         print("will get categorical data")
         existing_columns = list(data.columns)
-        needed_columns = [i for i in existing_columns if "_cat" in i or "_bin" in i]
+        needed_columns = [i for i in existing_columns if "_cat" in i or "_bin" in i and i not in excluded]
         needed_data = data[needed_columns]
         return needed_data
 

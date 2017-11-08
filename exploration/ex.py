@@ -3,6 +3,10 @@ from sklearn import svm
 from sklearn.neighbors.nearest_centroid import NearestCentroid
 import pandas as pd
 import numpy as np
+from exploration.my_mca import MCA
+import prince
+import pickle
+from sklearn.externals import joblib
 
 
 def load_data(path, negative_only=False, top=None):
@@ -50,15 +54,25 @@ def load_data(path, negative_only=False, top=None):
                                     set(binary_columns))
 
     data = pd.read_csv(path)
-    if negative_only:
-        false_rows = data[target_column] != 1
-        data = data[false_rows]
+    # if negative_only:
+    #     false_rows = data[target_column] != 1
+    #     data = data[false_rows]
     scaled = data[columns_for_scaling]
+    cols = [i for i in data.columns if "bin" in i or "cat" in i]
 
-    new = pd.DataFrame(data[category_columns], dtype='object')
-    categorical = pd.get_dummies(new)
+    new = pd.DataFrame(data[cols], dtype='object')
+    # new = new.head(500000)
+    mca_est = MCA(n_components=2)
+    print(len(cols))
+    res = mca_est.fit(new)
+    joblib.dump(mca_est, "mca.pkl")
+
+    print(dir(res))
+    result = res.transform(new)
+    print()
+
     binary = data[binary_columns]
-    categorical_matrix = categorical.as_matrix()
+    categorical_matrix = new.as_matrix()
     binary_matrix = binary.as_matrix()
     x = np.column_stack((categorical_matrix, binary_matrix, scaled.as_matrix()))
     # x = scaled.as_matrix()
@@ -74,7 +88,7 @@ def load_data(path, negative_only=False, top=None):
 
 
 if __name__ == "__main__":
-    x, y = load_data("../data/for_train.csv", negative_only=True)
+    x, y = load_data("../data/train.csv", negative_only=True)
     val_x, val_y = load_data("../data/for_validation.csv")
     # clf = NearestCentroid(metric='cosine')
     # clf = svm.SVC(verbose=True)

@@ -6,13 +6,14 @@ from base.dataset import ToTensor, BaseDataset
 
 class AutoEncoderDataset(BaseDataset):
     def __init__(self, path, noise_rate=None, is_train=True, transform=None, inference_only=False,
-                 top=None, remove_positive=False, augment=None, for_classifier=False):
+                 top=None, remove_positive=False, augment=None, for_classifier=False, duplicate_numeric_features=None):
         self.transform = transform
         self.inference_only = inference_only
         self.for_classifier = for_classifier
         self.noise_rate = noise_rate
         self.target_column = "target"
         self.is_train = is_train
+        self._helper = np.eye(2, 2).astype(int)
         mean_file = "mean.pkl"
         excluded = {"id", "target"}
 
@@ -29,8 +30,10 @@ class AutoEncoderDataset(BaseDataset):
 
         numeric = self.replace_na(numeric, mean_file)
         numeric = self.scale(numeric, "max_scaler.pkl")
-
-        self.x = np.column_stack((numeric, categorical.as_matrix()))
+        if duplicate_numeric_features is not None:
+            self.x = np.column_stack((numeric, numeric, numeric, categorical.as_matrix()))
+        else:
+            self.x = np.column_stack((numeric, categorical.as_matrix()))
         self.final_stuff(data, top=top)
 
     def __len__(self):
@@ -63,7 +66,7 @@ class AutoEncoderDataset(BaseDataset):
 
 if __name__ == "__main__":
     transformed_dataset = AutoEncoderDataset("../data/for_train.csv", transform=ToTensor(), augment=2,
-                                             for_classifier=False, noise_rate=0.5)
+                                             for_classifier=True, noise_rate=0.5)
     for i in range(len(transformed_dataset)):
         sample = transformed_dataset[i]
         print(i, sample['inputs'].size(), sample['targets'].size())

@@ -11,11 +11,11 @@ test_file = "../data/prediction/one-hot-test.csv"
 
 
 test_dataset = AutoEncoderDataset(test_file, transform=ToTensor(), is_train=False, inference_only=True, top=None,
-                                  for_classifier=True)
+                                  for_classifier=True, duplicate_numeric_features=True)
 dataloader = DataLoader(test_dataset, batch_size=256, shuffle=False, num_workers=1)
 print(len(test_dataset))
 
-net = Autoencoder.load("./models/clf_45.mdl")
+net = Autoencoder.load("./models/clf_39.mdl")
 net.is_classifier = True
 net.eval()
 
