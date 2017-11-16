@@ -9,3 +9,5 @@ logs/
 models/
 for_*.csv
 *.npy
+*.pkl
+*.mdl

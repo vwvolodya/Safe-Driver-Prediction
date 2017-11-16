@@ -29,12 +29,13 @@ class AutoEncoderDataset(BaseDataset):
         numeric = self.get_numeric_df(data, excluded)
 
         numeric = self.replace_na(numeric, mean_file)
-        numeric = self.scale(numeric, "max_scaler.pkl")
+        # numeric = self.scale(numeric, "max_scaler.pkl")
         if duplicate_numeric_features is not None:
             self.x = np.column_stack((numeric, numeric, numeric, categorical.as_matrix()))
         else:
             self.x = np.column_stack((numeric, categorical.as_matrix()))
         self.final_stuff(data, top=top)
+        self.save("../data/test", "../data/test_")
 
     def __len__(self):
         return self.shape[0]
@@ -65,8 +66,8 @@ class AutoEncoderDataset(BaseDataset):
 
 
 if __name__ == "__main__":
-    transformed_dataset = AutoEncoderDataset("../data/for_train.csv", transform=ToTensor(), augment=2,
-                                             for_classifier=True, noise_rate=0.5)
+    transformed_dataset = AutoEncoderDataset("../data/prediction/one-hot-test.csv", transform=ToTensor(), augment=False,
+                                             for_classifier=True, is_train=False, inference_only=True)
     for i in range(len(transformed_dataset)):
         sample = transformed_dataset[i]
         print(i, sample['inputs'].size(), sample['targets'].size())

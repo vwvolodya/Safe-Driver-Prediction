@@ -93,6 +93,11 @@ class BaseDataset(Dataset):
         self.shape = self.x.shape
         self.__print_stats(data)
 
+    def save(self, x_output_name, y_output_name):
+        np.save(x_output_name, self.x)
+        if not self.inference_only:
+            np.save(y_output_name, self.y)
+
     def __print_stats(self, data):
         if self.inference_only:
             return
