@@ -32,6 +32,12 @@ class BaseDataset(Dataset):
         return data
 
     @classmethod
+    def get_special_label_data(cls, data, label=0):
+        needed_rows = data["target"] == label
+        data = data[needed_rows]
+        return data
+
+    @classmethod
     def replace_na(cls, data, mean_file, na_value=-1):
         print("Replacing all -1 with NaN")
         needed_data = data.replace(na_value, np.NaN)

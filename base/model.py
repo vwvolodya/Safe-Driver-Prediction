@@ -50,7 +50,7 @@ class BaseModel(nn.Module):
     @classmethod
     def to_var(cls, x, use_gpu=True):
         if torch.cuda.is_available() and use_gpu:
-            x = x.cuda()
+            x = x.cuda(async=True)
         return Variable(x)
 
     @classmethod

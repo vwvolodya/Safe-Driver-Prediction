@@ -74,7 +74,7 @@ if __name__ == "__main__":
         if i == 3:
             break
 
-    dataloader = DataLoader(transformed_dataset, batch_size=4, shuffle=True, num_workers=1)
+    dataloader = DataLoader(transformed_dataset, batch_size=4, shuffle=True, num_workers=1, pin_memory=True)
     for i_batch, sample_batched in enumerate(dataloader):
         print(i_batch, sample_batched['inputs'].size(), sample_batched['targets'].size())
         if i_batch == 3:
